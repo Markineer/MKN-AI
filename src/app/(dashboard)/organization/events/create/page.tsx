@@ -21,7 +21,6 @@ import {
   Layers,
   Filter,
   Check,
-  Settings,
   Save,
   Eye,
   Loader2,
@@ -100,6 +99,53 @@ export default function CreateEventPage() {
   const [questionSource, setQuestionSource] = useState("");
   const [aiEval, setAiEval] = useState(false);
   const [aiSolve, setAiSolve] = useState(false);
+
+  // --- Step 4: Evaluation Criteria ---
+  const [criteria, setCriteria] = useState<{ name: string; maxScore: number }[]>([]);
+
+  // Auto-populate criteria when event type changes
+  useEffect(() => {
+    const defaults: Record<string, { name: string; maxScore: number }[]> = {
+      HACKATHON: [
+        { name: "الابتكار والإبداع", maxScore: 25 },
+        { name: "جودة التنفيذ التقني", maxScore: 25 },
+        { name: "تأثير الحل وقابليته للتطبيق", maxScore: 20 },
+        { name: "العرض التقديمي", maxScore: 15 },
+        { name: "العمل الجماعي", maxScore: 15 },
+      ],
+      CHALLENGE: [
+        { name: "صحة الإجابة", maxScore: 40 },
+        { name: "عمق التحليل", maxScore: 25 },
+        { name: "جودة العرض", maxScore: 20 },
+        { name: "الإبداع في الحل", maxScore: 15 },
+      ],
+      ASSESSMENT: [
+        { name: "صحة الإجابة", maxScore: 40 },
+        { name: "عمق التحليل", maxScore: 25 },
+        { name: "جودة العرض", maxScore: 20 },
+        { name: "الإبداع في الحل", maxScore: 15 },
+      ],
+      COMPETITION: [
+        { name: "جودة المشروع", maxScore: 30 },
+        { name: "الابتكار", maxScore: 25 },
+        { name: "العرض التقديمي", maxScore: 25 },
+        { name: "الأثر", maxScore: 20 },
+      ],
+      WORKSHOP: [
+        { name: "المشاركة الفعالة", maxScore: 40 },
+        { name: "جودة التطبيق", maxScore: 35 },
+        { name: "الفهم", maxScore: 25 },
+      ],
+      TRAINING: [
+        { name: "المشاركة الفعالة", maxScore: 40 },
+        { name: "جودة التطبيق", maxScore: 35 },
+        { name: "الفهم", maxScore: 25 },
+      ],
+    };
+    if (eventType && defaults[eventType]) {
+      setCriteria(defaults[eventType].map(c => ({ ...c })));
+    }
+  }, [eventType]);
 
   // --- Submission state ---
   const [submitting, setSubmitting] = useState(false);
@@ -200,6 +246,7 @@ export default function CreateEventPage() {
         totalPhases: hasPhases ? totalPhases : 1,
         aiEvaluationEnabled: aiEval,
         questionSource: questionSource || "MANUAL",
+        criteria: criteria.filter(c => c.name.trim()),
       };
 
       if (organizationId) {
@@ -701,54 +748,57 @@ export default function CreateEventPage() {
                   <h2 className="text-xl font-bold text-elm-navy">بنود التحكيم والتقييم</h2>
                   <p className="text-sm text-gray-500">حدد البنود ودرجاتها {isHackathon ? "للهاكاثون" : "للتقييم"}</p>
                 </div>
-                <button className="flex items-center gap-2 px-3 py-2 bg-brand-50 text-brand-600 rounded-xl text-sm font-medium hover:bg-brand-100">
-                  <Settings className="w-4 h-4" />
-                  استيراد من القوالب
-                </button>
+                <span className="text-xs text-gray-400">{criteria.length} بنود</span>
               </div>
-              {/* Default criteria based on type */}
               <div className="space-y-3">
-                {(isHackathon
-                  ? [
-                      { name: "الابتكار والإبداع", maxScore: 25 },
-                      { name: "جودة التنفيذ التقني", maxScore: 25 },
-                      { name: "تأثير الحل وقابليته للتطبيق", maxScore: 20 },
-                      { name: "العرض التقديمي", maxScore: 15 },
-                      { name: "العمل الجماعي", maxScore: 15 },
-                    ]
-                  : [
-                      { name: "صحة الإجابة", maxScore: 40 },
-                      { name: "عمق التحليل", maxScore: 25 },
-                      { name: "جودة العرض", maxScore: 20 },
-                      { name: "الإبداع في الحل", maxScore: 15 },
-                    ]
-                ).map((criteria, idx) => (
-                  <div key={idx} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl">
+                {criteria.map((c, idx) => (
+                  <div key={idx} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl animate-fade-in-up">
                     <div className="w-8 h-8 bg-brand-50 rounded-lg flex items-center justify-center text-brand-500 text-sm font-bold">
                       {idx + 1}
                     </div>
                     <input
                       type="text"
-                      defaultValue={criteria.name}
-                      className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm"
+                      value={c.name}
+                      onChange={(e) => {
+                        const updated = [...criteria];
+                        updated[idx] = { ...updated[idx], name: e.target.value };
+                        setCriteria(updated);
+                      }}
+                      placeholder="اسم البند"
+                      className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-200"
                     />
                     <div className="flex items-center gap-2">
                       <input
                         type="number"
-                        defaultValue={criteria.maxScore}
-                        className="w-20 px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-center"
+                        value={c.maxScore}
+                        onChange={(e) => {
+                          const updated = [...criteria];
+                          updated[idx] = { ...updated[idx], maxScore: Math.max(0, Number(e.target.value) || 0) };
+                          setCriteria(updated);
+                        }}
+                        min={0}
+                        className="w-20 px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-center focus:outline-none focus:ring-2 focus:ring-brand-200"
                       />
                       <span className="text-xs text-gray-500">نقطة</span>
                     </div>
-                    <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500">&times;</button>
+                    <button
+                      onClick={() => setCriteria(prev => prev.filter((_, i) => i !== idx))}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      &times;
+                    </button>
                   </div>
                 ))}
-                <button className="w-full p-3 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-500 hover:border-brand-300 hover:text-brand-500 transition-colors">
+                <button
+                  onClick={() => setCriteria(prev => [...prev, { name: "", maxScore: 10 }])}
+                  className="w-full p-3 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-500 hover:border-brand-300 hover:text-brand-500 transition-colors"
+                >
                   + إضافة بند تقييم جديد
                 </button>
                 <div className="flex justify-end">
-                  <div className="bg-elm-navy text-white px-4 py-2 rounded-xl text-sm">
-                    المجموع: <span className="font-bold">100</span> نقطة
+                  <div className={`px-4 py-2 rounded-xl text-sm ${criteria.reduce((sum, c) => sum + c.maxScore, 0) === 100 ? "bg-elm-navy text-white" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
+                    المجموع: <span className="font-bold">{criteria.reduce((sum, c) => sum + c.maxScore, 0)}</span> نقطة
+                    {criteria.reduce((sum, c) => sum + c.maxScore, 0) !== 100 && <span className="text-xs mr-2">(يُفضل 100)</span>}
                   </div>
                 </div>
               </div>
@@ -800,6 +850,10 @@ export default function CreateEventPage() {
               <div className="p-4 bg-gray-50 rounded-xl">
                 <p className="text-xs text-gray-400 mb-1">الذكاء الاصطناعي</p>
                 <p className="text-sm font-bold text-elm-navy">{aiEval ? "تقييم ذكي" : "---"} {aiSolve ? "+ حل ذكي" : ""}</p>
+              </div>
+              <div className="p-4 bg-gray-50 rounded-xl">
+                <p className="text-xs text-gray-400 mb-1">بنود التقييم</p>
+                <p className="text-sm font-bold text-elm-navy">{criteria.filter(c => c.name.trim()).length} بنود ({criteria.reduce((s, c) => s + c.maxScore, 0)} نقطة)</p>
               </div>
               {maxParticipants && (
                 <div className="p-4 bg-gray-50 rounded-xl">

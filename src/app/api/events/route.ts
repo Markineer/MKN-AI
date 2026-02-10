@@ -105,5 +105,19 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // Create evaluation criteria if provided
+  if (Array.isArray(body.criteria) && body.criteria.length > 0) {
+    await prisma.evaluationCriteria.createMany({
+      data: body.criteria.map((c: { name: string; maxScore: number }, idx: number) => ({
+        eventId: event.id,
+        name: c.name,
+        nameAr: c.name,
+        maxScore: c.maxScore || 10,
+        weight: 1.0,
+        sortOrder: idx,
+      })),
+    });
+  }
+
   return NextResponse.json(event, { status: 201 });
 }
