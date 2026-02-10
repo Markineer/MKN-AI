@@ -11,13 +11,23 @@ import {
   UserCheck,
   X,
   ChevronLeft,
+  ChevronDown,
+  MapPin,
 } from "lucide-react";
 import Link from "next/link";
+
+interface Track {
+  id: string;
+  name: string;
+  nameAr: string;
+  color: string | null;
+}
 
 interface Judge {
   id: string;
   userId: string;
   status: string;
+  trackId: string | null;
   createdAt: string;
   user: {
     id: string;
@@ -28,6 +38,7 @@ interface Judge {
     email: string;
     avatar: string | null;
   };
+  track: Track | null;
 }
 
 interface SearchUser {
@@ -44,6 +55,7 @@ export default function JudgesPage() {
   const eventId = params.eventId as string;
 
   const [judges, setJudges] = useState<Judge[]>([]);
+  const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [search, setSearch] = useState("");
@@ -51,8 +63,10 @@ export default function JudgesPage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [adding, setAdding] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [updatingTrack, setUpdatingTrack] = useState<string | null>(null);
+  const [openTrackDropdown, setOpenTrackDropdown] = useState<string | null>(null);
 
-  // Fetch judges
+  // Fetch judges + tracks
   useEffect(() => {
     async function fetchJudges() {
       try {
@@ -60,6 +74,7 @@ export default function JudgesPage() {
         if (!res.ok) throw new Error();
         const data = await res.json();
         setJudges(data.judges || []);
+        setTracks(data.tracks || []);
       } catch {
         // silently fail
       } finally {
@@ -103,6 +118,17 @@ export default function JudgesPage() {
     return () => clearTimeout(timer);
   }, [search, judges]);
 
+  // Close track dropdown on outside click
+  useEffect(() => {
+    function handleClick() {
+      setOpenTrackDropdown(null);
+    }
+    if (openTrackDropdown) {
+      document.addEventListener("click", handleClick);
+      return () => document.removeEventListener("click", handleClick);
+    }
+  }, [openTrackDropdown]);
+
   async function addJudge(userId: string) {
     setAdding(true);
     try {
@@ -138,6 +164,25 @@ export default function JudgesPage() {
     }
   }
 
+  async function assignTrack(memberId: string, trackId: string | null) {
+    setUpdatingTrack(memberId);
+    try {
+      const res = await fetch(`/api/events/${eventId}/judges/track`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId, trackId }),
+      });
+      if (!res.ok) throw new Error();
+      const updated = await res.json();
+      setJudges(prev => prev.map(j => j.id === memberId ? updated : j));
+    } catch {
+      // silently fail
+    } finally {
+      setUpdatingTrack(null);
+      setOpenTrackDropdown(null);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -145,6 +190,13 @@ export default function JudgesPage() {
       </div>
     );
   }
+
+  // Group judges by track for summary
+  const trackSummary = tracks.map(t => ({
+    ...t,
+    judgeCount: judges.filter(j => j.trackId === t.id).length,
+  }));
+  const unassignedCount = judges.filter(j => !j.trackId).length;
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -170,6 +222,32 @@ export default function JudgesPage() {
           إضافة محكم
         </button>
       </div>
+
+      {/* Track Summary Bar */}
+      {tracks.length > 0 && judges.length > 0 && (
+        <div className="flex flex-wrap gap-3 mb-6">
+          {trackSummary.map(t => (
+            <div
+              key={t.id}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-100 bg-white text-xs"
+            >
+              <span
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: t.color || "#7C3AED" }}
+              />
+              <span className="font-medium text-gray-700">{t.nameAr || t.name}</span>
+              <span className="text-gray-400">{t.judgeCount} محكم</span>
+            </div>
+          ))}
+          {unassignedCount > 0 && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-amber-100 bg-amber-50 text-xs">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+              <span className="font-medium text-amber-700">غير مخصص</span>
+              <span className="text-amber-500">{unassignedCount} محكم</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Judges Grid */}
       {judges.length === 0 ? (
@@ -215,7 +293,9 @@ export default function JudgesPage() {
                   )}
                 </button>
               </div>
-              <div className="flex items-center gap-2 mt-3">
+
+              {/* Status + Track */}
+              <div className="flex items-center gap-2 mt-3 flex-wrap">
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${
                   judge.status === "APPROVED"
                     ? "bg-emerald-50 text-emerald-700"
@@ -224,7 +304,82 @@ export default function JudgesPage() {
                   <UserCheck className="w-3 h-3" />
                   {judge.status === "APPROVED" ? "معتمد" : "قيد المراجعة"}
                 </span>
+
+                {/* Track badge */}
+                {judge.track && (
+                  <span
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
+                    style={{
+                      backgroundColor: (judge.track.color || "#7C3AED") + "15",
+                      color: judge.track.color || "#7C3AED",
+                    }}
+                  >
+                    <MapPin className="w-3 h-3" />
+                    {judge.track.nameAr || judge.track.name}
+                  </span>
+                )}
               </div>
+
+              {/* Track Selector */}
+              {tracks.length > 0 && (
+                <div className="mt-3 relative">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenTrackDropdown(openTrackDropdown === judge.id ? null : judge.id);
+                    }}
+                    disabled={updatingTrack === judge.id}
+                    className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                      {updatingTrack === judge.id ? (
+                        <span className="text-gray-400">جاري التحديث...</span>
+                      ) : judge.track ? (
+                        <span>{judge.track.nameAr || judge.track.name}</span>
+                      ) : (
+                        <span className="text-gray-400">تحديد المسار</span>
+                      )}
+                    </span>
+                    {updatingTrack === judge.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                    )}
+                  </button>
+
+                  {openTrackDropdown === judge.id && (
+                    <div
+                      className="absolute z-20 top-full mt-1 w-full bg-white rounded-lg border border-gray-200 shadow-lg py-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={() => assignTrack(judge.id, null)}
+                        className={`w-full text-right px-3 py-2 text-xs hover:bg-gray-50 transition-colors ${
+                          !judge.trackId ? "text-brand-600 font-medium bg-brand-50" : "text-gray-600"
+                        }`}
+                      >
+                        بدون مسار
+                      </button>
+                      {tracks.map(t => (
+                        <button
+                          key={t.id}
+                          onClick={() => assignTrack(judge.id, t.id)}
+                          className={`w-full text-right px-3 py-2 text-xs hover:bg-gray-50 transition-colors flex items-center gap-2 ${
+                            judge.trackId === t.id ? "text-brand-600 font-medium bg-brand-50" : "text-gray-600"
+                          }`}
+                        >
+                          <span
+                            className="w-2 h-2 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: t.color || "#7C3AED" }}
+                          />
+                          {t.nameAr || t.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>

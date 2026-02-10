@@ -24,11 +24,26 @@ export async function GET(
           avatar: true,
         },
       },
+      track: {
+        select: {
+          id: true,
+          name: true,
+          nameAr: true,
+          color: true,
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
 
-  return NextResponse.json({ judges });
+  // Also fetch available tracks for this event
+  const tracks = await prisma.eventTrack.findMany({
+    where: { eventId: params.id, isActive: true },
+    select: { id: true, name: true, nameAr: true, color: true },
+    orderBy: { sortOrder: "asc" },
+  });
+
+  return NextResponse.json({ judges, tracks });
 }
 
 export async function POST(
