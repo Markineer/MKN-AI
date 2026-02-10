@@ -29,7 +29,19 @@ import {
   Trash2,
   ChevronDown,
   Target,
+  Search,
+  X,
+  Plus,
 } from "lucide-react";
+
+interface SelectedJudge {
+  id: string;
+  firstName: string;
+  firstNameAr: string | null;
+  lastName: string;
+  lastNameAr: string | null;
+  email: string;
+}
 
 interface PhaseConfig {
   name: string;
@@ -40,7 +52,14 @@ interface PhaseConfig {
   maxAdvancing: number;
   advancePercent: number;
   criteria: { name: string; maxScore: number }[];
+  evaluationMethod: string;
 }
+
+const evaluationMethodLabels: Record<string, { label: string; desc: string }> = {
+  AI_AUTO: { label: "تقييم آلي", desc: "تُحسب الدرجات تلقائيا بالذكاء الاصطناعي أو المعادلات" },
+  JUDGE_MANUAL: { label: "تحكيم يدوي", desc: "يقوم المحكمون بتقييم المشاركين يدويا بناء على المعايير" },
+  COMBINED: { label: "مدمج", desc: "تقييم آلي + تحكيم يدوي معا" },
+};
 
 const phaseTypeLabels: Record<string, string> = {
   REGISTRATION: "تسجيل وقبول",
@@ -66,25 +85,25 @@ const phaseTypeColors: Record<string, string> = {
 
 const defaultPhaseTemplates: Record<string, PhaseConfig[]> = {
   HACKATHON: [
-    { name: "القبول الأولي", type: "REGISTRATION", isElimination: true, eliminationMethod: "PERCENTAGE", passThreshold: 0, maxAdvancing: 0, advancePercent: 70, criteria: [{ name: "اكتمال الفريق", maxScore: 30 }, { name: "تنوع التخصصات", maxScore: 40 }, { name: "وصف الفكرة", maxScore: 30 }] },
-    { name: "تطوير الحل", type: "DEVELOPMENT", isElimination: true, eliminationMethod: "TOP_N", passThreshold: 0, maxAdvancing: 10, advancePercent: 0, criteria: [{ name: "التقدم التقني", maxScore: 40 }, { name: "جودة التصميم", maxScore: 30 }, { name: "تقرير المرحلة", maxScore: 30 }] },
-    { name: "التحكيم", type: "JUDGING", isElimination: true, eliminationMethod: "TOP_N", passThreshold: 0, maxAdvancing: 5, advancePercent: 0, criteria: [{ name: "الابتكار", maxScore: 25 }, { name: "جودة الكود", maxScore: 25 }, { name: "تجربة المستخدم", maxScore: 25 }, { name: "العرض التقديمي", maxScore: 25 }] },
-    { name: "النهائيات", type: "FINALS", isElimination: false, eliminationMethod: "THRESHOLD", passThreshold: 0, maxAdvancing: 0, advancePercent: 0, criteria: [{ name: "العرض النهائي", maxScore: 30 }, { name: "الأثر والتطبيق", maxScore: 35 }, { name: "قابلية التوسع", maxScore: 35 }] },
+    { name: "القبول الأولي", type: "REGISTRATION", isElimination: true, eliminationMethod: "PERCENTAGE", passThreshold: 0, maxAdvancing: 0, advancePercent: 70, evaluationMethod: "AI_AUTO", criteria: [{ name: "اكتمال الفريق", maxScore: 30 }, { name: "تنوع التخصصات", maxScore: 40 }, { name: "وصف الفكرة", maxScore: 30 }] },
+    { name: "تطوير الحل", type: "DEVELOPMENT", isElimination: true, eliminationMethod: "TOP_N", passThreshold: 0, maxAdvancing: 10, advancePercent: 0, evaluationMethod: "COMBINED", criteria: [{ name: "التقدم التقني", maxScore: 40 }, { name: "جودة التصميم", maxScore: 30 }, { name: "تقرير المرحلة", maxScore: 30 }] },
+    { name: "التحكيم", type: "JUDGING", isElimination: true, eliminationMethod: "TOP_N", passThreshold: 0, maxAdvancing: 5, advancePercent: 0, evaluationMethod: "JUDGE_MANUAL", criteria: [{ name: "الابتكار", maxScore: 25 }, { name: "جودة الكود", maxScore: 25 }, { name: "تجربة المستخدم", maxScore: 25 }, { name: "العرض التقديمي", maxScore: 25 }] },
+    { name: "النهائيات", type: "FINALS", isElimination: false, eliminationMethod: "THRESHOLD", passThreshold: 0, maxAdvancing: 0, advancePercent: 0, evaluationMethod: "JUDGE_MANUAL", criteria: [{ name: "العرض النهائي", maxScore: 30 }, { name: "الأثر والتطبيق", maxScore: 35 }, { name: "قابلية التوسع", maxScore: 35 }] },
   ],
   CHALLENGE: [
-    { name: "التسجيل والفرز", type: "REGISTRATION", isElimination: true, eliminationMethod: "THRESHOLD", passThreshold: 50, maxAdvancing: 0, advancePercent: 0, criteria: [{ name: "الأهلية", maxScore: 50 }, { name: "الخبرة", maxScore: 50 }] },
-    { name: "حل الأسئلة", type: "JUDGING", isElimination: true, eliminationMethod: "PERCENTAGE", passThreshold: 0, maxAdvancing: 0, advancePercent: 50, criteria: [{ name: "صحة الإجابة", maxScore: 60 }, { name: "التحقق من الأقران", maxScore: 40 }] },
-    { name: "النتائج", type: "FINALS", isElimination: false, eliminationMethod: "THRESHOLD", passThreshold: 0, maxAdvancing: 0, advancePercent: 0, criteria: [{ name: "الترتيب النهائي", maxScore: 100 }] },
+    { name: "التسجيل والفرز", type: "REGISTRATION", isElimination: true, eliminationMethod: "THRESHOLD", passThreshold: 50, maxAdvancing: 0, advancePercent: 0, evaluationMethod: "AI_AUTO", criteria: [{ name: "الأهلية", maxScore: 50 }, { name: "الخبرة", maxScore: 50 }] },
+    { name: "حل الأسئلة", type: "JUDGING", isElimination: true, eliminationMethod: "PERCENTAGE", passThreshold: 0, maxAdvancing: 0, advancePercent: 50, evaluationMethod: "JUDGE_MANUAL", criteria: [{ name: "صحة الإجابة", maxScore: 60 }, { name: "التحقق من الأقران", maxScore: 40 }] },
+    { name: "النتائج", type: "FINALS", isElimination: false, eliminationMethod: "THRESHOLD", passThreshold: 0, maxAdvancing: 0, advancePercent: 0, evaluationMethod: "AI_AUTO", criteria: [{ name: "الترتيب النهائي", maxScore: 100 }] },
   ],
   ASSESSMENT: [
-    { name: "التسجيل والفرز", type: "REGISTRATION", isElimination: true, eliminationMethod: "THRESHOLD", passThreshold: 50, maxAdvancing: 0, advancePercent: 0, criteria: [{ name: "الأهلية", maxScore: 50 }, { name: "الخبرة", maxScore: 50 }] },
-    { name: "حل الأسئلة", type: "JUDGING", isElimination: true, eliminationMethod: "PERCENTAGE", passThreshold: 0, maxAdvancing: 0, advancePercent: 50, criteria: [{ name: "صحة الإجابة", maxScore: 60 }, { name: "التحقق من الأقران", maxScore: 40 }] },
-    { name: "النتائج", type: "FINALS", isElimination: false, eliminationMethod: "THRESHOLD", passThreshold: 0, maxAdvancing: 0, advancePercent: 0, criteria: [{ name: "الترتيب النهائي", maxScore: 100 }] },
+    { name: "التسجيل والفرز", type: "REGISTRATION", isElimination: true, eliminationMethod: "THRESHOLD", passThreshold: 50, maxAdvancing: 0, advancePercent: 0, evaluationMethod: "AI_AUTO", criteria: [{ name: "الأهلية", maxScore: 50 }, { name: "الخبرة", maxScore: 50 }] },
+    { name: "حل الأسئلة", type: "JUDGING", isElimination: true, eliminationMethod: "PERCENTAGE", passThreshold: 0, maxAdvancing: 0, advancePercent: 50, evaluationMethod: "AI_AUTO", criteria: [{ name: "صحة الإجابة", maxScore: 60 }, { name: "التحقق من الأقران", maxScore: 40 }] },
+    { name: "النتائج", type: "FINALS", isElimination: false, eliminationMethod: "THRESHOLD", passThreshold: 0, maxAdvancing: 0, advancePercent: 0, evaluationMethod: "AI_AUTO", criteria: [{ name: "الترتيب النهائي", maxScore: 100 }] },
   ],
   COMPETITION: [
-    { name: "التأهيل", type: "REGISTRATION", isElimination: true, eliminationMethod: "PERCENTAGE", passThreshold: 0, maxAdvancing: 0, advancePercent: 60, criteria: [{ name: "جودة التقديم", maxScore: 50 }, { name: "الإبداع", maxScore: 50 }] },
-    { name: "المنافسة", type: "JUDGING", isElimination: true, eliminationMethod: "TOP_N", passThreshold: 0, maxAdvancing: 10, advancePercent: 0, criteria: [{ name: "جودة المشروع", maxScore: 40 }, { name: "الإبداع", maxScore: 30 }, { name: "العرض", maxScore: 30 }] },
-    { name: "النهائيات", type: "FINALS", isElimination: false, eliminationMethod: "THRESHOLD", passThreshold: 0, maxAdvancing: 0, advancePercent: 0, criteria: [{ name: "التقييم النهائي", maxScore: 100 }] },
+    { name: "التأهيل", type: "REGISTRATION", isElimination: true, eliminationMethod: "PERCENTAGE", passThreshold: 0, maxAdvancing: 0, advancePercent: 60, evaluationMethod: "AI_AUTO", criteria: [{ name: "جودة التقديم", maxScore: 50 }, { name: "الإبداع", maxScore: 50 }] },
+    { name: "المنافسة", type: "JUDGING", isElimination: true, eliminationMethod: "TOP_N", passThreshold: 0, maxAdvancing: 10, advancePercent: 0, evaluationMethod: "JUDGE_MANUAL", criteria: [{ name: "جودة المشروع", maxScore: 40 }, { name: "الإبداع", maxScore: 30 }, { name: "العرض", maxScore: 30 }] },
+    { name: "النهائيات", type: "FINALS", isElimination: false, eliminationMethod: "THRESHOLD", passThreshold: 0, maxAdvancing: 0, advancePercent: 0, evaluationMethod: "JUDGE_MANUAL", criteria: [{ name: "التقييم النهائي", maxScore: 100 }] },
   ],
 };
 
@@ -156,6 +175,13 @@ export default function CreateEventPage() {
 
   const hasPhases = phases.length > 0;
   const hasElimination = phases.some(p => p.isElimination);
+  const hasManualJudging = phases.some(p => p.evaluationMethod === "JUDGE_MANUAL" || p.evaluationMethod === "COMBINED");
+
+  // --- Judges ---
+  const [selectedJudges, setSelectedJudges] = useState<SelectedJudge[]>([]);
+  const [judgeSearch, setJudgeSearch] = useState("");
+  const [judgeSearchResults, setJudgeSearchResults] = useState<SelectedJudge[]>([]);
+  const [judgeSearchLoading, setJudgeSearchLoading] = useState(false);
 
   // --- Step 4: Questions & AI ---
   const [questionSource, setQuestionSource] = useState("");
@@ -208,6 +234,39 @@ export default function CreateEventPage() {
       setCriteria(defaults[eventType].map(c => ({ ...c })));
     }
   }, [eventType]);
+
+  // Debounced judge search
+  useEffect(() => {
+    if (!judgeSearch.trim()) {
+      setJudgeSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setJudgeSearchLoading(true);
+      try {
+        const res = await fetch(`/api/users?search=${encodeURIComponent(judgeSearch)}&limit=10`);
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        setJudgeSearchResults(
+          (data.users || [])
+            .filter((u: any) => !selectedJudges.some(j => j.id === u.id))
+            .map((u: any) => ({
+              id: u.id,
+              firstName: u.firstName || "",
+              firstNameAr: u.firstNameAr || null,
+              lastName: u.lastName || "",
+              lastNameAr: u.lastNameAr || null,
+              email: u.email,
+            }))
+        );
+      } catch {
+        setJudgeSearchResults([]);
+      } finally {
+        setJudgeSearchLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [judgeSearch, selectedJudges]);
 
   // --- Submission state ---
   const [submitting, setSubmitting] = useState(false);
@@ -318,8 +377,10 @@ export default function CreateEventPage() {
           passThreshold: p.eliminationMethod === "THRESHOLD" ? p.passThreshold : null,
           maxAdvancing: p.eliminationMethod === "TOP_N" ? p.maxAdvancing : null,
           advancePercent: p.eliminationMethod === "PERCENTAGE" ? p.advancePercent : null,
+          evaluationMethod: p.evaluationMethod || null,
           criteria: p.criteria.filter(c => c.name.trim()),
         })) : [],
+        judges: selectedJudges.map(j => j.id),
       };
 
       if (organizationId) {
@@ -622,7 +683,7 @@ export default function CreateEventPage() {
                         setPhases(template.map(p => ({ ...p, criteria: p.criteria.map(c => ({ ...c })) })));
                         setExpandedPhase(0);
                       } else {
-                        setPhases([{ name: "المرحلة 1", type: "GENERAL", isElimination: false, eliminationMethod: "THRESHOLD", passThreshold: 50, maxAdvancing: 10, advancePercent: 50, criteria: [] }]);
+                        setPhases([{ name: "المرحلة 1", type: "GENERAL", isElimination: false, eliminationMethod: "THRESHOLD", passThreshold: 50, maxAdvancing: 10, advancePercent: 50, evaluationMethod: "", criteria: [] }]);
                         setExpandedPhase(0);
                       }
                     }
@@ -761,6 +822,121 @@ export default function CreateEventPage() {
                           )}
                         </div>
 
+                        {/* Evaluation Method */}
+                        <div className="mb-5 p-4 bg-white rounded-xl border border-gray-100">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Cpu className="w-4 h-4 text-teal-500" />
+                            <span className="text-sm font-bold text-elm-navy">آلية التقييم</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-3">
+                            {Object.entries(evaluationMethodLabels).map(([key, { label, desc }]) => (
+                              <button
+                                key={key}
+                                type="button"
+                                onClick={() => updatePhase({ evaluationMethod: key })}
+                                className={`p-3 rounded-xl border-2 text-right transition-all ${
+                                  phase.evaluationMethod === key
+                                    ? "border-teal-500 bg-teal-50"
+                                    : "border-gray-100 bg-gray-50 hover:border-gray-200"
+                                }`}
+                              >
+                                {key === "AI_AUTO" && <Cpu className={`w-5 h-5 mb-2 ${phase.evaluationMethod === key ? "text-teal-500" : "text-gray-400"}`} />}
+                                {key === "JUDGE_MANUAL" && <Users className={`w-5 h-5 mb-2 ${phase.evaluationMethod === key ? "text-teal-500" : "text-gray-400"}`} />}
+                                {key === "COMBINED" && <Layers className={`w-5 h-5 mb-2 ${phase.evaluationMethod === key ? "text-teal-500" : "text-gray-400"}`} />}
+                                <h4 className="text-xs font-bold text-elm-navy">{label}</h4>
+                                <p className="text-[10px] text-gray-500 mt-1">{desc}</p>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Judge Picker */}
+                        {(phase.evaluationMethod === "JUDGE_MANUAL" || phase.evaluationMethod === "COMBINED") && (
+                          <div className="mb-5 p-4 bg-white rounded-xl border border-gray-100">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <Users className="w-4 h-4 text-brand-500" />
+                                <span className="text-sm font-bold text-elm-navy">المحكمون</span>
+                              </div>
+                              <span className="text-xs text-gray-400">{selectedJudges.length} محكم</span>
+                            </div>
+
+                            {/* Search */}
+                            <div className="relative mb-3">
+                              <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                              <input
+                                type="text"
+                                placeholder="ابحث عن محكم بالاسم أو البريد..."
+                                value={judgeSearch}
+                                onChange={(e) => setJudgeSearch(e.target.value)}
+                                className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-200"
+                              />
+                              {judgeSearchLoading && <Loader2 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />}
+                            </div>
+
+                            {/* Search Results */}
+                            {judgeSearchResults.length > 0 && (
+                              <div className="mb-3 max-h-40 overflow-y-auto bg-gray-50 rounded-xl border border-gray-200 divide-y divide-gray-100">
+                                {judgeSearchResults.map((user) => (
+                                  <button
+                                    key={user.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedJudges(prev => [...prev, user]);
+                                      setJudgeSearch("");
+                                      setJudgeSearchResults([]);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-brand-50 text-right transition-colors"
+                                  >
+                                    <div className="w-8 h-8 bg-brand-100 rounded-full flex items-center justify-center text-brand-600 text-xs font-bold">
+                                      {(user.firstNameAr || user.firstName || "?")[0]}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium text-elm-navy truncate">
+                                        {user.firstNameAr || user.firstName} {user.lastNameAr || user.lastName}
+                                      </p>
+                                      <p className="text-[10px] text-gray-400 truncate">{user.email}</p>
+                                    </div>
+                                    <Plus className="w-4 h-4 text-brand-500" />
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Selected Judges */}
+                            {selectedJudges.length > 0 ? (
+                              <div className="flex flex-wrap gap-2">
+                                {selectedJudges.map((judge) => (
+                                  <div
+                                    key={judge.id}
+                                    className="flex items-center gap-2 px-3 py-1.5 bg-brand-50 rounded-lg border border-brand-200"
+                                  >
+                                    <div className="w-6 h-6 bg-brand-100 rounded-full flex items-center justify-center text-brand-600 text-[10px] font-bold">
+                                      {(judge.firstNameAr || judge.firstName || "?")[0]}
+                                    </div>
+                                    <span className="text-xs font-medium text-brand-700">
+                                      {judge.firstNameAr || judge.firstName} {judge.lastNameAr || judge.lastName}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedJudges(prev => prev.filter(j => j.id !== judge.id))}
+                                      className="text-brand-400 hover:text-red-500"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              !judgeSearch && (
+                                <p className="text-xs text-gray-400 text-center py-2">
+                                  لم يتم اختيار محكمين بعد. ابحث عن مستخدمين لإضافتهم كمحكمين.
+                                </p>
+                              )
+                            )}
+                          </div>
+                        )}
+
                         {/* Phase Criteria */}
                         <div className="p-4 bg-white rounded-xl border border-gray-100">
                           <div className="flex items-center justify-between mb-3">
@@ -825,7 +1001,7 @@ export default function CreateEventPage() {
                   {/* Add Phase Button */}
                   <button
                     onClick={() => {
-                      const newPhase: PhaseConfig = { name: `المرحلة ${phases.length + 1}`, type: "GENERAL", isElimination: false, eliminationMethod: "THRESHOLD", passThreshold: 50, maxAdvancing: 10, advancePercent: 50, criteria: [] };
+                      const newPhase: PhaseConfig = { name: `المرحلة ${phases.length + 1}`, type: "GENERAL", isElimination: false, eliminationMethod: "THRESHOLD", passThreshold: 50, maxAdvancing: 10, advancePercent: 50, evaluationMethod: "", criteria: [] };
                       setPhases(prev => [...prev, newPhase]);
                       setExpandedPhase(phases.length);
                     }}
@@ -1096,6 +1272,31 @@ export default function CreateEventPage() {
                 <p className="text-xs text-gray-400 mb-1">بنود التقييم</p>
                 <p className="text-sm font-bold text-elm-navy">{criteria.filter(c => c.name.trim()).length} بنود ({criteria.reduce((s, c) => s + c.maxScore, 0)} نقطة)</p>
               </div>
+              {hasPhases && phases.some(p => p.evaluationMethod) && (
+                <div className="p-4 bg-gray-50 rounded-xl">
+                  <p className="text-xs text-gray-400 mb-1">آلية التقييم</p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {phases.filter(p => p.evaluationMethod).map((p, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-teal-50 text-teal-700 border border-teal-200">
+                        {p.name}: {evaluationMethodLabels[p.evaluationMethod]?.label || "غير محدد"}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {selectedJudges.length > 0 && (
+                <div className="p-4 bg-gray-50 rounded-xl">
+                  <p className="text-xs text-gray-400 mb-1">المحكمون</p>
+                  <p className="text-sm font-bold text-elm-navy">{selectedJudges.length} محكم</p>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {selectedJudges.map(j => (
+                      <span key={j.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-brand-50 text-brand-700 border border-brand-200">
+                        {j.firstNameAr || j.firstName} {j.lastNameAr || j.lastName}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
               {maxParticipants && (
                 <div className="p-4 bg-gray-50 rounded-xl">
                   <p className="text-xs text-gray-400 mb-1">الحد الأقصى للمشاركين</p>

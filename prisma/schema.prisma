@@ -504,6 +504,8 @@ model EventPhase {
   passThreshold   Float?   @map("pass_threshold")     // min score to pass
   maxAdvancing    Int?     @map("max_advancing")       // max participants/teams advancing
   advancePercent  Float?   @map("advance_percent")     // % that advance
+  // ── Evaluation method ────────────
+  evaluationMethod EvaluationType? @map("evaluation_method")
   // ──────────────────────────────────
   isActive        Boolean  @default(true) @map("is_active")
   createdAt       DateTime @default(now()) @map("created_at")

@@ -142,6 +142,7 @@ export async function POST(req: NextRequest) {
           passThreshold: p.passThreshold ?? null,
           maxAdvancing: p.maxAdvancing ?? null,
           advancePercent: p.advancePercent ?? null,
+          evaluationMethod: p.evaluationMethod || null,
         },
       });
 
@@ -159,6 +160,20 @@ export async function POST(req: NextRequest) {
         });
       }
     }
+  }
+
+  // Create judge EventMember records
+  if (Array.isArray(body.judges) && body.judges.length > 0) {
+    await prisma.eventMember.createMany({
+      data: body.judges.map((userId: string) => ({
+        eventId: event.id,
+        userId,
+        role: "JUDGE" as const,
+        status: "APPROVED" as const,
+        assignedBy: session.user.id,
+      })),
+      skipDuplicates: true,
+    });
   }
 
   return NextResponse.json(event, { status: 201 });
