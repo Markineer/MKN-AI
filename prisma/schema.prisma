@@ -1,0 +1,1257 @@
+// ============================================================================
+// ELM Platform - Complete Database Schema
+// منصة ELM للفعاليات - قاعدة البيانات المتكاملة
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// 1. USERS & AUTHENTICATION - المستخدمين والمصادقة
+// ============================================================================
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  emailVerified     DateTime?
+  password          String
+  firstName         String    @map("first_name")
+  firstNameAr       String?   @map("first_name_ar")
+  lastName          String    @map("last_name")
+  lastNameAr        String?   @map("last_name_ar")
+  phone             String?
+  avatar            String?
+  bio               String?
+  bioAr             String?
+  nationalId        String?   @unique @map("national_id")
+  gender            Gender?
+  dateOfBirth       DateTime? @map("date_of_birth")
+  city              String?
+  country           String?   @default("SA")
+  language          String    @default("ar")
+  timezone          String    @default("Asia/Riyadh")
+  isActive          Boolean   @default(true) @map("is_active")
+  isVerified        Boolean   @default(false) @map("is_verified")
+  mfaEnabled        Boolean   @default(false) @map("mfa_enabled")
+  mfaSecret         String?   @map("mfa_secret")
+  lastLoginAt       DateTime? @map("last_login_at")
+  lastLoginIp       String?   @map("last_login_ip")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  platformRoles     UserPlatformRole[]
+  organizationMembers OrganizationMember[]
+  eventMembers      EventMember[]
+  teamMembers       TeamMember[]
+  submissions       Submission[]
+  evaluationsGiven  Evaluation[]        @relation("EvaluatorEvaluations")
+  mentorSessions    MentorSession[]     @relation("MentorSessions")
+  menteeSessions    MentorSession[]     @relation("MenteeSessions")
+  certificates      Certificate[]
+  notifications     Notification[]
+  activityLogs      ActivityLog[]
+  researchAccess    ResearchAccess[]
+  sessions          Session[]
+  accounts          Account[]
+  attendanceBadges  AttendanceBadge[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+  userAgent    String?  @map("user_agent")
+  ipAddress    String?  @map("ip_address")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+// ============================================================================
+// 2. PLATFORM ROLES & PERMISSIONS - الأدوار والصلاحيات على مستوى المنصة
+// ============================================================================
+
+model PlatformRole {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  nameAr      String   @map("name_ar")
+  description String?
+  descriptionAr String? @map("description_ar")
+  level       RoleLevel
+  isSystem    Boolean  @default(false) @map("is_system")
+  isActive    Boolean  @default(true) @map("is_active")
+  color       String?
+  icon        String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  permissions RolePermission[]
+  users       UserPlatformRole[]
+
+  @@map("platform_roles")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  nameAr      String   @map("name_ar")
+  description String?
+  descriptionAr String? @map("description_ar")
+  module      PermissionModule
+  action      PermissionAction
+  resource    String
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  roles       RolePermission[]
+
+  @@unique([module, action, resource])
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String   @id @default(cuid())
+  roleId       String   @map("role_id")
+  permissionId String   @map("permission_id")
+  conditions   Json?    // JSON conditions for conditional permissions
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  role       PlatformRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission   @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserPlatformRole {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  roleId    String   @map("role_id")
+  assignedBy String? @map("assigned_by")
+  expiresAt DateTime? @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role PlatformRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_platform_roles")
+}
+
+enum RoleLevel {
+  SUPER_ADMIN       // مدير علم وماركنير - Full control
+  PLATFORM_ADMIN    // مدير المنصة
+  ORGANIZATION_ADMIN // مدير المؤسسة
+  EVENT_MANAGER     // مدير الفعالية
+  JUDGE             // محكم
+  MENTOR            // مرشد
+  EXPERT            // خبير
+  PARTICIPANT       // مشارك
+  RESEARCHER        // باحث
+  VIEWER            // مشاهد
+}
+
+enum PermissionModule {
+  PLATFORM          // إدارة المنصة
+  USERS             // إدارة المستخدمين
+  ORGANIZATIONS     // إدارة المؤسسات
+  EVENTS            // إدارة الفعاليات
+  HACKATHONS        // إدارة الهاكاثونات
+  CHALLENGES        // إدارة التحديات
+  TEAMS             // إدارة الفرق
+  SUBMISSIONS       // إدارة التقديمات
+  EVALUATIONS       // إدارة التقييمات
+  CERTIFICATES      // إدارة الشهادات
+  REPORTS           // التقارير
+  RESEARCH          // البحث العلمي
+  AI_TOOLS          // أدوات الذكاء الاصطناعي
+  SETTINGS          // الإعدادات
+  NOTIFICATIONS     // الإشعارات
+  BILLING           // الفواتير
+}
+
+enum PermissionAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  MANAGE           // Full CRUD
+  EXPORT
+  IMPORT
+  APPROVE
+  REJECT
+  ASSIGN
+  EVALUATE
+  PUBLISH
+  ARCHIVE
+}
+
+// ============================================================================
+// 3. ORGANIZATIONS - المؤسسات (جامعات / شركات / جهات حكومية / خيرية)
+// ============================================================================
+
+model Organization {
+  id              String   @id @default(cuid())
+  name            String
+  nameAr          String   @map("name_ar")
+  slug            String   @unique
+  type            OrganizationType
+  sector          OrganizationSector
+  description     String?
+  descriptionAr   String?  @map("description_ar")
+  logo            String?
+  banner          String?
+  website         String?
+  email           String?
+  phone           String?
+  address         String?
+  city            String?
+  country         String?  @default("SA")
+  registrationNo  String?  @map("registration_no")
+  taxId           String?  @map("tax_id")
+  primaryColor    String?  @default("#1B2559") @map("primary_color")
+  secondaryColor  String?  @default("#6C63FF") @map("secondary_color")
+  isActive        Boolean  @default(true) @map("is_active")
+  isVerified      Boolean  @default(false) @map("is_verified")
+  verifiedAt      DateTime? @map("verified_at")
+  subscriptionPlan SubscriptionPlan @default(FREE) @map("subscription_plan")
+  subscriptionExpiresAt DateTime? @map("subscription_expires_at")
+  maxEvents       Int      @default(5) @map("max_events")
+  maxMembers      Int      @default(50) @map("max_members")
+  dataIsolationKey String?  @unique @map("data_isolation_key")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  members         OrganizationMember[]
+  events          Event[]
+  settings        OrganizationSetting[]
+  departments     Department[]
+  invitations     OrganizationInvitation[]
+
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  userId         String   @map("user_id")
+  role           OrgMemberRole @default(MEMBER)
+  title          String?
+  titleAr        String?  @map("title_ar")
+  departmentId   String?  @map("department_id")
+  isActive       Boolean  @default(true) @map("is_active")
+  joinedAt       DateTime @default(now()) @map("joined_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department   Department?  @relation(fields: [departmentId], references: [id])
+
+  @@unique([organizationId, userId])
+  @@map("organization_members")
+}
+
+model Department {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  nameAr         String   @map("name_ar")
+  headId         String?  @map("head_id")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members      OrganizationMember[]
+  events       Event[]
+
+  @@map("departments")
+}
+
+model OrganizationInvitation {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  email          String
+  role           OrgMemberRole @default(MEMBER)
+  departmentId   String?  @map("department_id")
+  titleAr        String?  @map("title_ar")
+  invitedBy      String?  @map("invited_by")
+  token          String   @unique
+  expiresAt      DateTime @map("expires_at")
+  acceptedAt     DateTime? @map("accepted_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("organization_invitations")
+}
+
+model OrganizationSetting {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  key            String
+  value          String
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, key])
+  @@map("organization_settings")
+}
+
+enum OrganizationType {
+  UNIVERSITY        // جامعة
+  COMPANY           // شركة
+  GOVERNMENT        // جهة حكومية
+  NON_PROFIT        // جهة خيرية
+  RESEARCH_CENTER   // مركز بحثي
+  TRAINING_CENTER   // مركز تدريب
+  OTHER             // أخرى
+}
+
+enum OrganizationSector {
+  TECHNOLOGY        // تقنية
+  EDUCATION         // تعليم
+  HEALTH            // صحة
+  FINANCE           // مالية
+  ENERGY            // طاقة
+  TOURISM           // سياحة
+  ENTREPRENEURSHIP  // ريادة أعمال
+  SUSTAINABILITY    // استدامة
+  LEGAL             // قانوني
+  ENGINEERING       // هندسة
+  OTHER             // أخرى
+}
+
+enum OrgMemberRole {
+  OWNER             // مالك المؤسسة
+  ADMIN             // مدير
+  DEPARTMENT_HEAD   // رئيس قسم
+  COORDINATOR       // منسق
+  MEMBER            // عضو
+}
+
+enum SubscriptionPlan {
+  FREE
+  BASIC
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+// ============================================================================
+// 4. EVENTS - الفعاليات (هاكاثونات / تحديات / مسابقات)
+// ============================================================================
+
+model Event {
+  id               String   @id @default(cuid())
+  organizationId   String   @map("organization_id")
+  departmentId     String?  @map("department_id")
+  title            String
+  titleAr          String   @map("title_ar")
+  slug             String   @unique
+  description      String?
+  descriptionAr    String?  @map("description_ar")
+  type             EventType
+  category         EventCategory
+  status           EventStatus @default(DRAFT)
+  visibility       EventVisibility @default(PUBLIC)
+  banner           String?
+  logo             String?
+  startDate        DateTime @map("start_date")
+  endDate          DateTime @map("end_date")
+  registrationStart DateTime? @map("registration_start")
+  registrationEnd  DateTime? @map("registration_end")
+  timezone         String   @default("Asia/Riyadh")
+  location         String?
+  locationAr       String?  @map("location_ar")
+  isOnline         Boolean  @default(false) @map("is_online")
+  onlineLink       String?  @map("online_link")
+  maxParticipants  Int?     @map("max_participants")
+  // ── Registration Mode ──────────────
+  registrationMode RegistrationMode @default(INDIVIDUAL) @map("registration_mode")
+  minTeamSize      Int?     @map("min_team_size")
+  maxTeamSize      Int?     @map("max_team_size")
+  allowIndividual  Boolean  @default(true) @map("allow_individual")
+  requireApproval  Boolean  @default(false) @map("require_approval")
+  // ── Phases & Elimination ───────────
+  hasPhases        Boolean  @default(false) @map("has_phases")
+  hasElimination   Boolean  @default(false) @map("has_elimination")
+  totalPhases      Int      @default(1) @map("total_phases")
+  // ── Branding ───────────────────────
+  primaryColor     String?  @map("primary_color")
+  secondaryColor   String?  @map("secondary_color")
+  rules            String?
+  rulesAr          String?  @map("rules_ar")
+  prizes           Json?
+  // ── AI Settings ────────────────────
+  aiEvaluationEnabled Boolean @default(false) @map("ai_evaluation_enabled")
+  aiGenerateQuestions Boolean @default(false) @map("ai_generate_questions")
+  aiSolveAnswers     Boolean @default(false) @map("ai_solve_answers")
+  aiModelConfig    Json?    @map("ai_model_config")
+  // ── Question Settings ──────────────
+  questionSource   QuestionSource @default(MANUAL) @map("question_source")
+  questionFileUrl  String?  @map("question_file_url")
+  // ── Timestamps ─────────────────────
+  publishedAt      DateTime? @map("published_at")
+  archivedAt       DateTime? @map("archived_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department       Department?      @relation(fields: [departmentId], references: [id])
+  tracks           EventTrack[]
+  phases           EventPhase[]
+  members          EventMember[]
+  teams            Team[]
+  submissions      Submission[]
+  evaluationCriteria EvaluationCriteria[]
+  certificates     Certificate[]
+  settings         EventSetting[]
+  announcements    Announcement[]
+  challenges       Challenge[]
+  attendanceBadges AttendanceBadge[]
+
+  @@map("events")
+}
+
+model EventTrack {
+  id          String   @id @default(cuid())
+  eventId     String   @map("event_id")
+  name        String
+  nameAr      String   @map("name_ar")
+  description String?
+  descriptionAr String? @map("description_ar")
+  icon        String?
+  color       String?
+  domain      TrackDomain
+  maxTeams    Int?     @map("max_teams")
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  event       Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  teams       Team[]
+  challenges  Challenge[]
+
+  @@map("event_tracks")
+}
+
+model EventPhase {
+  id              String   @id @default(cuid())
+  eventId         String   @map("event_id")
+  name            String
+  nameAr          String   @map("name_ar")
+  description     String?
+  descriptionAr   String?  @map("description_ar")
+  phaseNumber     Int      @map("phase_number")
+  phaseType       PhaseType @default(GENERAL) @map("phase_type")
+  status          PhaseStatus @default(UPCOMING)
+  startDate       DateTime @map("start_date")
+  endDate         DateTime @map("end_date")
+  // ── Elimination settings ───────────
+  isElimination   Boolean  @default(false) @map("is_elimination")
+  passThreshold   Float?   @map("pass_threshold")     // min score to pass
+  maxAdvancing    Int?     @map("max_advancing")       // max participants/teams advancing
+  advancePercent  Float?   @map("advance_percent")     // % that advance
+  // ──────────────────────────────────
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  event   Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  criteria PhaseCriteria[]
+  results  PhaseResult[]
+
+  @@unique([eventId, phaseNumber])
+  @@map("event_phases")
+}
+
+model PhaseCriteria {
+  id            String   @id @default(cuid())
+  phaseId       String   @map("phase_id")
+  name          String
+  nameAr        String   @map("name_ar")
+  description   String?
+  descriptionAr String?  @map("description_ar")
+  maxScore      Float    @default(10) @map("max_score")
+  weight        Float    @default(1.0)
+  sortOrder     Int      @default(0) @map("sort_order")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  phase PhaseResult[] @relation("CriteriaResults")
+  eventPhase EventPhase @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+
+  @@map("phase_criteria")
+}
+
+model PhaseResult {
+  id            String   @id @default(cuid())
+  phaseId       String   @map("phase_id")
+  teamId        String?  @map("team_id")
+  userId        String?  @map("user_id")
+  criteriaId    String?  @map("criteria_id")
+  score         Float?
+  totalScore    Float?   @map("total_score")
+  status        PhaseResultStatus @default(PENDING)
+  feedback      String?
+  feedbackAr    String?  @map("feedback_ar")
+  evaluatedBy   String?  @map("evaluated_by")
+  evaluatedAt   DateTime? @map("evaluated_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  phase     EventPhase     @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  criteria  PhaseCriteria? @relation("CriteriaResults", fields: [criteriaId], references: [id])
+
+  @@map("phase_results")
+}
+
+enum PhaseResultStatus {
+  PENDING       // بانتظار التقييم
+  EVALUATED     // تم التقييم
+  ADVANCED      // متأهل للمرحلة التالية
+  ELIMINATED    // مستبعد
+}
+
+enum PhaseType {
+  GENERAL       // عام
+  REGISTRATION  // تسجيل
+  IDEA_REVIEW   // مراجعة أفكار
+  DEVELOPMENT   // تطوير
+  PRESENTATION  // عرض تقديمي
+  JUDGING       // تحكيم
+  FINALS        // نهائيات
+  ELIMINATION   // تصفيات
+}
+
+model EventMember {
+  id          String   @id @default(cuid())
+  eventId     String   @map("event_id")
+  userId      String   @map("user_id")
+  role        EventMemberRole
+  status      MemberStatus @default(PENDING)
+  permissions Json?
+  assignedBy  String?  @map("assigned_by")
+  approvedAt  DateTime? @map("approved_at")
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId, role])
+  @@map("event_members")
+}
+
+model EventSetting {
+  id      String @id @default(cuid())
+  eventId String @map("event_id")
+  key     String
+  value   String
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, key])
+  @@map("event_settings")
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  eventId   String   @map("event_id")
+  title     String
+  titleAr   String?  @map("title_ar")
+  content   String
+  contentAr String?  @map("content_ar")
+  priority  AnnouncementPriority @default(NORMAL)
+  isPublished Boolean @default(false) @map("is_published")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@map("announcements")
+}
+
+enum EventType {
+  HACKATHON         // هاكاثون
+  CHALLENGE         // تحدي
+  COMPETITION       // مسابقة
+  WORKSHOP          // ورشة عمل
+  ASSESSMENT        // تقييم مستوى
+  TRAINING          // تدريب
+}
+
+enum EventCategory {
+  PROGRAMMING       // برمجة
+  LEGAL             // قانوني
+  BUSINESS          // أعمال
+  DESIGN            // تصميم
+  DATA_SCIENCE      // علوم بيانات
+  AI_ML             // ذكاء اصطناعي
+  CYBERSECURITY     // أمن سيبراني
+  HEALTH            // صحة
+  EDUCATION         // تعليم
+  SUSTAINABILITY    // استدامة
+  ENTREPRENEURSHIP  // ريادة أعمال
+  GENERAL           // عام
+}
+
+enum EventStatus {
+  DRAFT             // مسودة
+  PENDING_APPROVAL  // بانتظار الموافقة
+  PUBLISHED         // منشور
+  REGISTRATION_OPEN // التسجيل مفتوح
+  IN_PROGRESS       // جاري
+  EVALUATION        // مرحلة التقييم
+  COMPLETED         // مكتمل
+  ARCHIVED          // مؤرشف
+  CANCELLED         // ملغي
+}
+
+enum EventVisibility {
+  PUBLIC            // عام
+  PRIVATE           // خاص
+  ORGANIZATION_ONLY // للمؤسسة فقط
+  INVITE_ONLY       // بدعوة فقط
+}
+
+enum EventMemberRole {
+  ORGANIZER         // منظم
+  SUPERVISOR        // مشرف
+  JUDGE             // محكم
+  MENTOR            // مرشد
+  EXPERT            // خبير
+  PARTICIPANT       // مشارك
+  OBSERVER          // مراقب
+  COORDINATOR       // منسق
+}
+
+enum MemberStatus {
+  PENDING           // بانتظار القبول
+  APPROVED          // مقبول
+  REJECTED          // مرفوض
+  WITHDRAWN         // منسحب
+  SUSPENDED         // موقوف
+}
+
+enum PhaseStatus {
+  UPCOMING
+  ACTIVE
+  COMPLETED
+}
+
+enum TrackDomain {
+  TECHNOLOGY
+  HEALTH
+  EDUCATION
+  TOURISM
+  ENTREPRENEURSHIP
+  SUSTAINABILITY
+  LEGAL
+  FINANCE
+  DESIGN
+  GENERAL
+}
+
+enum AnnouncementPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+// ============================================================================
+// 5. TEAMS - الفرق
+// ============================================================================
+
+model Team {
+  id          String   @id @default(cuid())
+  eventId     String   @map("event_id")
+  trackId     String?  @map("track_id")
+  name        String
+  nameAr      String?  @map("name_ar")
+  description String?
+  logo        String?
+  status      TeamStatus @default(FORMING)
+  projectTitle String?  @map("project_title")
+  projectTitleAr String? @map("project_title_ar")
+  projectDescription String? @map("project_description")
+  projectDescriptionAr String? @map("project_description_ar")
+  repositoryUrl String? @map("repository_url")
+  presentationUrl String? @map("presentation_url")
+  demoUrl     String?  @map("demo_url")
+  miroBoard   String?  @map("miro_board")
+  totalScore  Float?   @map("total_score")
+  rank        Int?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  event       Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  track       EventTrack? @relation(fields: [trackId], references: [id])
+  members     TeamMember[]
+  submissions Submission[]
+  evaluations Evaluation[]
+
+  @@unique([eventId, name])
+  @@map("teams")
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String   @map("team_id")
+  userId    String   @map("user_id")
+  role      TeamMemberRole @default(MEMBER)
+  isActive  Boolean  @default(true) @map("is_active")
+  joinedAt  DateTime @default(now()) @map("joined_at")
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@map("team_members")
+}
+
+enum TeamStatus {
+  FORMING
+  ACTIVE
+  SUBMITTED
+  EVALUATED
+  WINNER
+  DISQUALIFIED
+}
+
+enum TeamMemberRole {
+  LEADER
+  MEMBER
+}
+
+// ============================================================================
+// 6. CHALLENGES & QUESTIONS - التحديات والأسئلة
+// ============================================================================
+
+model Challenge {
+  id            String   @id @default(cuid())
+  eventId       String   @map("event_id")
+  trackId       String?  @map("track_id")
+  title         String
+  titleAr       String   @map("title_ar")
+  description   String?
+  descriptionAr String?  @map("description_ar")
+  type          ChallengeType
+  difficulty    Difficulty @default(MEDIUM)
+  points        Int      @default(100)
+  timeLimit     Int?     @map("time_limit") // in minutes
+  sortOrder     Int      @default(0) @map("sort_order")
+  isActive      Boolean  @default(true) @map("is_active")
+  startsAt      DateTime? @map("starts_at")
+  endsAt        DateTime? @map("ends_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  event     Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  track     EventTrack? @relation(fields: [trackId], references: [id])
+  questions Question[]
+  submissions Submission[]
+
+  @@map("challenges")
+}
+
+model Question {
+  id            String   @id @default(cuid())
+  challengeId   String   @map("challenge_id")
+  type          QuestionType
+  content       String
+  contentAr     String   @map("content_ar")
+  explanation   String?
+  explanationAr String?  @map("explanation_ar")
+  options       Json?    // For MCQ: [{id, text, textAr, isCorrect}]
+  correctAnswer String?  @map("correct_answer")
+  rubric        Json?    // Grading rubric for essay/code
+  aiPrompt      String?  @map("ai_prompt") // AI evaluation prompt
+  points        Int      @default(10)
+  sortOrder     Int      @default(0) @map("sort_order")
+  isRequired    Boolean  @default(true) @map("is_required")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  challenge Challenge  @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  answers   Answer[]
+
+  @@map("questions")
+}
+
+model Answer {
+  id           String   @id @default(cuid())
+  questionId   String   @map("question_id")
+  submissionId String   @map("submission_id")
+  content      String
+  isCorrect    Boolean? @map("is_correct")
+  score        Float?
+  aiScore      Float?   @map("ai_score")
+  aiFeedback   String?  @map("ai_feedback")
+  aiFeedbackAr String?  @map("ai_feedback_ar")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  question   Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, submissionId])
+  @@map("answers")
+}
+
+enum ChallengeType {
+  CODING            // برمجية
+  QUIZ              // اختبار
+  ESSAY             // مقالية
+  CASE_STUDY        // دراسة حالة
+  PROJECT           // مشروع
+  PRESENTATION      // عرض تقديمي
+  MIXED             // مختلط
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE   // اختيار متعدد
+  TRUE_FALSE        // صح أو خطأ
+  SHORT_ANSWER      // إجابة قصيرة
+  ESSAY             // مقالة
+  CODE              // برمجة
+  FILE_UPLOAD       // رفع ملف
+  CASE_STUDY        // دراسة حالة
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+  EXPERT
+}
+
+// ============================================================================
+// 7. SUBMISSIONS & EVALUATIONS - التقديمات والتقييمات
+// ============================================================================
+
+model Submission {
+  id            String   @id @default(cuid())
+  eventId       String   @map("event_id")
+  challengeId   String?  @map("challenge_id")
+  teamId        String?  @map("team_id")
+  userId        String   @map("user_id")
+  type          SubmissionType
+  status        SubmissionStatus @default(DRAFT)
+  content       String?
+  fileUrl       String?  @map("file_url")
+  repositoryUrl String?  @map("repository_url")
+  metadata      Json?
+  totalScore    Float?   @map("total_score")
+  aiTotalScore  Float?   @map("ai_total_score")
+  finalScore    Float?   @map("final_score")
+  submittedAt   DateTime? @map("submitted_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  event     Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  challenge Challenge?  @relation(fields: [challengeId], references: [id])
+  team      Team?       @relation(fields: [teamId], references: [id])
+  user      User        @relation(fields: [userId], references: [id])
+  answers   Answer[]
+  evaluations Evaluation[]
+
+  @@map("submissions")
+}
+
+model Evaluation {
+  id             String   @id @default(cuid())
+  submissionId   String   @map("submission_id")
+  evaluatorId    String?  @map("evaluator_id")
+  teamId         String?  @map("team_id")
+  type           EvaluationType
+  scores         Json     // {criteriaId: score, ...}
+  totalScore     Float    @map("total_score")
+  feedback       String?
+  feedbackAr     String?  @map("feedback_ar")
+  strengths      String?
+  weaknesses     String?
+  isPublished    Boolean  @default(false) @map("is_published")
+  evaluatedAt    DateTime @default(now()) @map("evaluated_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  evaluator  User?      @relation("EvaluatorEvaluations", fields: [evaluatorId], references: [id])
+  team       Team?      @relation(fields: [teamId], references: [id])
+
+  @@map("evaluations")
+}
+
+model EvaluationCriteria {
+  id          String   @id @default(cuid())
+  eventId     String   @map("event_id")
+  name        String
+  nameAr      String   @map("name_ar")
+  description String?
+  descriptionAr String? @map("description_ar")
+  weight      Float    @default(1.0)
+  maxScore    Float    @default(10) @map("max_score")
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@map("evaluation_criteria")
+}
+
+enum SubmissionType {
+  INDIVIDUAL
+  TEAM
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  EVALUATED
+  RETURNED
+}
+
+enum EvaluationType {
+  AI_AUTO           // تقييم آلي بالذكاء الاصطناعي
+  JUDGE_MANUAL      // تقييم يدوي من المحكم
+  MENTOR_REVIEW     // مراجعة المرشد
+  PEER_REVIEW       // مراجعة الأقران
+  COMBINED          // مدمج
+}
+
+// ============================================================================
+// 8. MENTOR SESSIONS - جلسات الإرشاد
+// ============================================================================
+
+model MentorSession {
+  id          String   @id @default(cuid())
+  mentorId    String   @map("mentor_id")
+  menteeId    String   @map("mentee_id")
+  eventId     String?  @map("event_id")
+  scheduledAt DateTime @map("scheduled_at")
+  duration    Int      @default(30) // minutes
+  status      SessionStatus @default(SCHEDULED)
+  notes       String?
+  rating      Int?
+  feedback    String?
+  meetingLink String?  @map("meeting_link")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  mentor User @relation("MentorSessions", fields: [mentorId], references: [id])
+  mentee User @relation("MenteeSessions", fields: [menteeId], references: [id])
+
+  @@map("mentor_sessions")
+}
+
+enum SessionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+// ============================================================================
+// 9. CERTIFICATES - الشهادات
+// ============================================================================
+
+model Certificate {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  eventId       String   @map("event_id")
+  templateId    String?  @map("template_id")
+  teamId        String?  @map("team_id")
+  type          CertificateType
+  title         String
+  titleAr       String   @map("title_ar")
+  description   String?
+  certificateNo String   @unique @map("certificate_no")
+  rank          Int?                           // المركز (1, 2, 3...)
+  rankLabel     String?  @map("rank_label")    // "المركز الأول", "الفائز"...
+  totalScore    Float?   @map("total_score")
+  isTeam        Boolean  @default(false) @map("is_team")
+  teamName      String?  @map("team_name")
+  fileUrl       String?  @map("file_url")
+  metadata      Json?
+  issuedAt      DateTime @default(now()) @map("issued_at")
+  expiresAt     DateTime? @map("expires_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user  User  @relation(fields: [userId], references: [id])
+  event Event @relation(fields: [eventId], references: [id])
+  template CertificateTemplate? @relation(fields: [templateId], references: [id])
+
+  @@map("certificates")
+}
+
+model CertificateTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  nameAr      String   @map("name_ar")
+  type        CertificateType
+  htmlTemplate String  @map("html_template")
+  cssStyles   String?  @map("css_styles")
+  variables   Json?
+  isDefault   Boolean  @default(false) @map("is_default")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  certificates Certificate[]
+
+  @@map("certificate_templates")
+}
+
+enum CertificateType {
+  PARTICIPATION     // مشاركة
+  COMPLETION        // إتمام
+  ACHIEVEMENT       // إنجاز
+  WINNER            // فائز
+  JUDGE             // تحكيم
+  MENTOR            // إرشاد
+  ORGANIZER         // تنظيم
+}
+
+// ============================================================================
+// 10. RESEARCH - البحث العلمي (للباحثين)
+// ============================================================================
+
+model ResearchAccess {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  datasetId   String?  @map("dataset_id")
+  accessLevel ResearchAccessLevel @default(READ_ONLY)
+  purpose     String?
+  approvedBy  String?  @map("approved_by")
+  status      AccessStatus @default(PENDING)
+  expiresAt   DateTime? @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user    User             @relation(fields: [userId], references: [id])
+  dataset ResearchDataset? @relation(fields: [datasetId], references: [id])
+
+  @@map("research_access")
+}
+
+model ResearchDataset {
+  id          String   @id @default(cuid())
+  name        String
+  nameAr      String   @map("name_ar")
+  description String?
+  descriptionAr String? @map("description_ar")
+  type        DatasetType
+  source      String?
+  format      String?
+  recordCount Int?     @map("record_count")
+  isAnonymized Boolean @default(true) @map("is_anonymized")
+  isPublic    Boolean  @default(false) @map("is_public")
+  tags        String[]
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  access ResearchAccess[]
+
+  @@map("research_datasets")
+}
+
+enum ResearchAccessLevel {
+  READ_ONLY
+  DOWNLOAD
+  FULL_ACCESS
+}
+
+enum AccessStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVOKED
+  EXPIRED
+}
+
+enum DatasetType {
+  CHALLENGE_RESPONSES   // إجابات التحديات
+  PARTICIPANT_BEHAVIOR  // سلوكيات المتعلمين
+  EVALUATION_DATA       // بيانات التقييم
+  PERFORMANCE_METRICS   // مقاييس الأداء
+  AGGREGATE_STATS       // إحصائيات مجمعة
+}
+
+// ============================================================================
+// 11. NOTIFICATIONS - الإشعارات
+// ============================================================================
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  type      NotificationType
+  title     String
+  titleAr   String?  @map("title_ar")
+  message   String
+  messageAr String?  @map("message_ar")
+  data      Json?
+  isRead    Boolean  @default(false) @map("is_read")
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  SYSTEM
+  EVENT
+  TEAM
+  SUBMISSION
+  EVALUATION
+  CERTIFICATE
+  INVITATION
+  REMINDER
+  ANNOUNCEMENT
+}
+
+// ============================================================================
+// 12. ACTIVITY LOG - سجل النشاطات (Audit Trail)
+// ============================================================================
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userId      String?  @map("user_id")
+  action      String
+  resource    String
+  resourceId  String?  @map("resource_id")
+  details     Json?
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([resource, resourceId])
+  @@map("activity_logs")
+}
+
+// ============================================================================
+// 13. ATTENDANCE BADGES - بطاقات الحضور
+// ============================================================================
+
+model AttendanceBadge {
+  id            String   @id @default(cuid())
+  eventId       String   @map("event_id")
+  userId        String   @map("user_id")
+  teamId        String?  @map("team_id")
+  badgeNo       String   @unique @map("badge_no")
+  type          BadgeType
+  participantName   String @map("participant_name")
+  participantNameAr String? @map("participant_name_ar")
+  role          EventMemberRole
+  teamName      String?  @map("team_name")
+  trackName     String?  @map("track_name")
+  qrCode        String?  @map("qr_code")
+  checkedInAt   DateTime? @map("checked_in_at")
+  checkedOutAt  DateTime? @map("checked_out_at")
+  isCheckedIn   Boolean  @default(false) @map("is_checked_in")
+  fileUrl       String?  @map("file_url")
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@unique([eventId, userId])
+  @@map("attendance_badges")
+}
+
+enum BadgeType {
+  INDIVIDUAL    // فردي
+  TEAM_MEMBER   // عضو فريق
+  JUDGE         // محكم
+  MENTOR        // مرشد
+  ORGANIZER     // منظم
+  EXPERT        // خبير
+  SPEAKER       // متحدث
+  VIP           // ضيف مميز
+}
+
+enum RegistrationMode {
+  INDIVIDUAL    // تسجيل فردي
+  TEAM          // تسجيل كفرق
+  BOTH          // فردي وفرق
+}
+
+enum QuestionSource {
+  MANUAL        // إنشاء يدوي
+  FILE_UPLOAD   // رفع ملف أسئلة
+  AI_GENERATED  // إنشاء بالذكاء الاصطناعي
+  MIXED         // مختلط
+}
+
+// ============================================================================
+// 14. PLATFORM SETTINGS - إعدادات المنصة
+// ============================================================================
+
+model PlatformSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  type      String   @default("string") // string, number, boolean, json
+  group     String   @default("general")
+  isPublic  Boolean  @default(false) @map("is_public")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("platform_settings")
+}
