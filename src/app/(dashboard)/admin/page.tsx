@@ -18,6 +18,8 @@ import {
 import prisma from "@/lib/prisma";
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
+
 const statusLabels: Record<string, string> = {
   DRAFT: "مسودة",
   PUBLISHED: "منشور",
