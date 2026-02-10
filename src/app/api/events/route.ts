@@ -119,5 +119,47 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // Create phases + phase criteria if provided
+  if (Array.isArray(body.phases) && body.phases.length > 0) {
+    const evStart = new Date(body.startDate).getTime();
+    const evEnd = new Date(body.endDate).getTime();
+    const phaseDuration = (evEnd - evStart) / body.phases.length;
+
+    for (const [idx, p] of body.phases.entries()) {
+      const phaseStart = new Date(evStart + phaseDuration * idx);
+      const phaseEnd = new Date(evStart + phaseDuration * (idx + 1));
+
+      const phase = await prisma.eventPhase.create({
+        data: {
+          eventId: event.id,
+          name: p.name,
+          nameAr: p.nameAr || p.name,
+          phaseNumber: p.phaseNumber || idx + 1,
+          phaseType: p.phaseType || "GENERAL",
+          startDate: phaseStart,
+          endDate: phaseEnd,
+          isElimination: p.isElimination ?? false,
+          passThreshold: p.passThreshold ?? null,
+          maxAdvancing: p.maxAdvancing ?? null,
+          advancePercent: p.advancePercent ?? null,
+        },
+      });
+
+      // Create phase criteria
+      if (Array.isArray(p.criteria) && p.criteria.length > 0) {
+        await prisma.phaseCriteria.createMany({
+          data: p.criteria.map((c: { name: string; maxScore: number }, ci: number) => ({
+            phaseId: phase.id,
+            name: c.name,
+            nameAr: c.name,
+            maxScore: c.maxScore || 10,
+            weight: 1.0,
+            sortOrder: ci,
+          })),
+        });
+      }
+    }
+  }
+
   return NextResponse.json(event, { status: 201 });
 }

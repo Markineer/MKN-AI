@@ -26,7 +26,67 @@ import {
   Loader2,
   AlertCircle,
   MapPin,
+  Trash2,
+  ChevronDown,
+  Target,
 } from "lucide-react";
+
+interface PhaseConfig {
+  name: string;
+  type: string;
+  isElimination: boolean;
+  eliminationMethod: string;
+  passThreshold: number;
+  maxAdvancing: number;
+  advancePercent: number;
+  criteria: { name: string; maxScore: number }[];
+}
+
+const phaseTypeLabels: Record<string, string> = {
+  REGISTRATION: "تسجيل وقبول",
+  IDEA_REVIEW: "مراجعة الأفكار",
+  DEVELOPMENT: "تطوير الحل",
+  PRESENTATION: "العرض التقديمي",
+  JUDGING: "التحكيم",
+  FINALS: "النهائيات",
+  ELIMINATION: "تصفيات",
+  GENERAL: "عام",
+};
+
+const phaseTypeColors: Record<string, string> = {
+  REGISTRATION: "bg-blue-500",
+  IDEA_REVIEW: "bg-amber-500",
+  DEVELOPMENT: "bg-purple-500",
+  PRESENTATION: "bg-pink-500",
+  JUDGING: "bg-brand-500",
+  FINALS: "bg-emerald-500",
+  ELIMINATION: "bg-red-500",
+  GENERAL: "bg-gray-500",
+};
+
+const defaultPhaseTemplates: Record<string, PhaseConfig[]> = {
+  HACKATHON: [
+    { name: "القبول الأولي", type: "REGISTRATION", isElimination: true, eliminationMethod: "PERCENTAGE", passThreshold: 0, maxAdvancing: 0, advancePercent: 70, criteria: [{ name: "اكتمال الفريق", maxScore: 30 }, { name: "تنوع التخصصات", maxScore: 40 }, { name: "وصف الفكرة", maxScore: 30 }] },
+    { name: "تطوير الحل", type: "DEVELOPMENT", isElimination: true, eliminationMethod: "TOP_N", passThreshold: 0, maxAdvancing: 10, advancePercent: 0, criteria: [{ name: "التقدم التقني", maxScore: 40 }, { name: "جودة التصميم", maxScore: 30 }, { name: "تقرير المرحلة", maxScore: 30 }] },
+    { name: "التحكيم", type: "JUDGING", isElimination: true, eliminationMethod: "TOP_N", passThreshold: 0, maxAdvancing: 5, advancePercent: 0, criteria: [{ name: "الابتكار", maxScore: 25 }, { name: "جودة الكود", maxScore: 25 }, { name: "تجربة المستخدم", maxScore: 25 }, { name: "العرض التقديمي", maxScore: 25 }] },
+    { name: "النهائيات", type: "FINALS", isElimination: false, eliminationMethod: "THRESHOLD", passThreshold: 0, maxAdvancing: 0, advancePercent: 0, criteria: [{ name: "العرض النهائي", maxScore: 30 }, { name: "الأثر والتطبيق", maxScore: 35 }, { name: "قابلية التوسع", maxScore: 35 }] },
+  ],
+  CHALLENGE: [
+    { name: "التسجيل والفرز", type: "REGISTRATION", isElimination: true, eliminationMethod: "THRESHOLD", passThreshold: 50, maxAdvancing: 0, advancePercent: 0, criteria: [{ name: "الأهلية", maxScore: 50 }, { name: "الخبرة", maxScore: 50 }] },
+    { name: "حل الأسئلة", type: "JUDGING", isElimination: true, eliminationMethod: "PERCENTAGE", passThreshold: 0, maxAdvancing: 0, advancePercent: 50, criteria: [{ name: "صحة الإجابة", maxScore: 60 }, { name: "التحقق من الأقران", maxScore: 40 }] },
+    { name: "النتائج", type: "FINALS", isElimination: false, eliminationMethod: "THRESHOLD", passThreshold: 0, maxAdvancing: 0, advancePercent: 0, criteria: [{ name: "الترتيب النهائي", maxScore: 100 }] },
+  ],
+  ASSESSMENT: [
+    { name: "التسجيل والفرز", type: "REGISTRATION", isElimination: true, eliminationMethod: "THRESHOLD", passThreshold: 50, maxAdvancing: 0, advancePercent: 0, criteria: [{ name: "الأهلية", maxScore: 50 }, { name: "الخبرة", maxScore: 50 }] },
+    { name: "حل الأسئلة", type: "JUDGING", isElimination: true, eliminationMethod: "PERCENTAGE", passThreshold: 0, maxAdvancing: 0, advancePercent: 50, criteria: [{ name: "صحة الإجابة", maxScore: 60 }, { name: "التحقق من الأقران", maxScore: 40 }] },
+    { name: "النتائج", type: "FINALS", isElimination: false, eliminationMethod: "THRESHOLD", passThreshold: 0, maxAdvancing: 0, advancePercent: 0, criteria: [{ name: "الترتيب النهائي", maxScore: 100 }] },
+  ],
+  COMPETITION: [
+    { name: "التأهيل", type: "REGISTRATION", isElimination: true, eliminationMethod: "PERCENTAGE", passThreshold: 0, maxAdvancing: 0, advancePercent: 60, criteria: [{ name: "جودة التقديم", maxScore: 50 }, { name: "الإبداع", maxScore: 50 }] },
+    { name: "المنافسة", type: "JUDGING", isElimination: true, eliminationMethod: "TOP_N", passThreshold: 0, maxAdvancing: 10, advancePercent: 0, criteria: [{ name: "جودة المشروع", maxScore: 40 }, { name: "الإبداع", maxScore: 30 }, { name: "العرض", maxScore: 30 }] },
+    { name: "النهائيات", type: "FINALS", isElimination: false, eliminationMethod: "THRESHOLD", passThreshold: 0, maxAdvancing: 0, advancePercent: 0, criteria: [{ name: "التقييم النهائي", maxScore: 100 }] },
+  ],
+};
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
@@ -91,9 +151,11 @@ export default function CreateEventPage() {
   const [regMode, setRegMode] = useState("");
   const [minTeamSize, setMinTeamSize] = useState<number>(3);
   const [maxTeamSize, setMaxTeamSize] = useState<number>(5);
-  const [hasPhases, setHasPhases] = useState(false);
-  const [hasElimination, setHasElimination] = useState(false);
-  const [totalPhases, setTotalPhases] = useState(3);
+  const [phases, setPhases] = useState<PhaseConfig[]>([]);
+  const [expandedPhase, setExpandedPhase] = useState<number | null>(null);
+
+  const hasPhases = phases.length > 0;
+  const hasElimination = phases.some(p => p.isElimination);
 
   // --- Step 4: Questions & AI ---
   const [questionSource, setQuestionSource] = useState("");
@@ -243,10 +305,21 @@ export default function CreateEventPage() {
         allowIndividual: regMode !== "TEAM",
         hasPhases,
         hasElimination: hasPhases ? hasElimination : false,
-        totalPhases: hasPhases ? totalPhases : 1,
+        totalPhases: hasPhases ? phases.length : 1,
         aiEvaluationEnabled: aiEval,
         questionSource: questionSource || "MANUAL",
         criteria: criteria.filter(c => c.name.trim()),
+        phases: hasPhases ? phases.map((p, i) => ({
+          name: p.name,
+          nameAr: p.name,
+          phaseNumber: i + 1,
+          phaseType: p.type,
+          isElimination: p.isElimination,
+          passThreshold: p.eliminationMethod === "THRESHOLD" ? p.passThreshold : null,
+          maxAdvancing: p.eliminationMethod === "TOP_N" ? p.maxAdvancing : null,
+          advancePercent: p.eliminationMethod === "PERCENTAGE" ? p.advancePercent : null,
+          criteria: p.criteria.filter(c => c.name.trim()),
+        })) : [],
       };
 
       if (organizationId) {
@@ -536,76 +609,230 @@ export default function CreateEventPage() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-xl font-bold text-elm-navy">المراحل</h2>
-                  <p className="text-sm text-gray-500 mt-1">هل الفعالية تتضمن عدة مراحل متتالية؟</p>
+                  <p className="text-sm text-gray-500 mt-1">صمم رحلة المشاركين عبر مراحل الفعالية</p>
                 </div>
                 <button
-                  onClick={() => setHasPhases(!hasPhases)}
-                  className={`w-12 h-7 rounded-full transition-colors relative ${hasPhases ? "bg-brand-500" : "bg-gray-200"}`}
+                  onClick={() => {
+                    if (phases.length > 0) {
+                      setPhases([]);
+                      setExpandedPhase(null);
+                    } else {
+                      const template = defaultPhaseTemplates[eventType];
+                      if (template) {
+                        setPhases(template.map(p => ({ ...p, criteria: p.criteria.map(c => ({ ...c })) })));
+                        setExpandedPhase(0);
+                      } else {
+                        setPhases([{ name: "المرحلة 1", type: "GENERAL", isElimination: false, eliminationMethod: "THRESHOLD", passThreshold: 50, maxAdvancing: 10, advancePercent: 50, criteria: [] }]);
+                        setExpandedPhase(0);
+                      }
+                    }
+                  }}
+                  className={`w-12 h-7 rounded-full transition-colors relative ${phases.length > 0 ? "bg-brand-500" : "bg-gray-200"}`}
                 >
-                  <div className={`w-5 h-5 bg-white rounded-full shadow absolute top-1 transition-all ${hasPhases ? "left-1" : "right-1"}`} />
+                  <div className={`w-5 h-5 bg-white rounded-full shadow absolute top-1 transition-all ${phases.length > 0 ? "left-1" : "right-1"}`} />
                 </button>
               </div>
 
-              {hasPhases && (
+              {phases.length > 0 && (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-elm-navy mb-1">عدد المراحل</label>
-                      <input
-                        type="number"
-                        value={totalPhases}
-                        onChange={(e) => setTotalPhases(Number(e.target.value))}
-                        min={2}
-                        max={10}
-                        className="w-24 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-center"
-                      />
-                    </div>
-                    <div className="flex items-center gap-3 bg-amber-50 px-4 py-3 rounded-xl">
-                      <Filter className="w-5 h-5 text-amber-600" />
-                      <div>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={hasElimination}
-                            onChange={(e) => setHasElimination(e.target.checked)}
-                            className="w-4 h-4 rounded border-gray-300 text-brand-500"
-                          />
-                          <span className="text-sm font-medium text-amber-800">تفعيل التصفيات</span>
-                        </label>
-                        <p className="text-xs text-amber-600 mt-0.5">قبول ورفض المشاركين بين المراحل</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Phase Preview */}
-                  <div className="flex gap-3 overflow-x-auto pb-2 mt-4">
-                    {Array.from({ length: totalPhases }, (_, i) => (
+                  {/* Journey Timeline */}
+                  <div className="flex items-center gap-2 overflow-x-auto pb-3">
+                    {phases.map((p, i) => (
                       <div key={i} className="flex items-center">
-                        <div className="min-w-[180px] bg-gray-50 rounded-xl p-4 border border-gray-200">
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold ${i === totalPhases - 1 ? "bg-emerald-500" : "bg-brand-500"}`}>
-                              {i + 1}
-                            </div>
-                            <span className="text-xs font-bold text-elm-navy">المرحلة {i + 1}</span>
+                        <button
+                          onClick={() => setExpandedPhase(expandedPhase === i ? null : i)}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
+                            expandedPhase === i
+                              ? "bg-brand-500 text-white shadow-md"
+                              : "bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200"
+                          }`}
+                        >
+                          <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-white text-xs font-bold ${expandedPhase === i ? "bg-white/20" : phaseTypeColors[p.type] || "bg-gray-500"}`}>
+                            {i + 1}
                           </div>
-                          <input
-                            type="text"
-                            placeholder={i === 0 ? "التسجيل" : i === totalPhases - 1 ? "النهائيات" : `المرحلة ${i + 1}`}
-                            className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs"
-                          />
-                          {hasElimination && i < totalPhases - 1 && (
-                            <div className="mt-2 flex items-center gap-1 text-[10px] text-amber-600 bg-amber-50 px-2 py-1 rounded-lg">
-                              <Filter className="w-3 h-3" />
-                              تصفية
-                            </div>
-                          )}
-                        </div>
-                        {i < totalPhases - 1 && (
-                          <ChevronLeft className="w-4 h-4 text-gray-300 mx-1 flex-shrink-0" />
-                        )}
+                          {p.name}
+                          {p.isElimination && <Filter className="w-3 h-3 text-amber-400" />}
+                        </button>
+                        {i < phases.length - 1 && <ChevronLeft className="w-4 h-4 text-gray-300 mx-1 flex-shrink-0" />}
                       </div>
                     ))}
                   </div>
+
+                  {/* Expanded Phase Card */}
+                  {expandedPhase !== null && phases[expandedPhase] && (() => {
+                    const pi = expandedPhase;
+                    const phase = phases[pi];
+                    const updatePhase = (updates: Partial<PhaseConfig>) => {
+                      setPhases(prev => prev.map((p, i) => i === pi ? { ...p, ...updates } : p));
+                    };
+                    const phaseCriteriaTotal = phase.criteria.reduce((s, c) => s + c.maxScore, 0);
+
+                    return (
+                      <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200 animate-fade-in-up">
+                        {/* Phase Header */}
+                        <div className="flex items-center justify-between mb-5">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold ${phaseTypeColors[phase.type] || "bg-gray-500"}`}>
+                              {pi + 1}
+                            </div>
+                            <div>
+                              <input
+                                type="text"
+                                value={phase.name}
+                                onChange={(e) => updatePhase({ name: e.target.value })}
+                                className="text-base font-bold text-elm-navy bg-transparent border-none outline-none focus:border-b-2 focus:border-brand-300"
+                                placeholder="اسم المرحلة"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={phase.type}
+                              onChange={(e) => updatePhase({ type: e.target.value })}
+                              className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-brand-200"
+                            >
+                              {Object.entries(phaseTypeLabels).map(([k, v]) => (
+                                <option key={k} value={k}>{v}</option>
+                              ))}
+                            </select>
+                            {phases.length > 1 && (
+                              <button
+                                onClick={() => {
+                                  setPhases(prev => prev.filter((_, i) => i !== pi));
+                                  setExpandedPhase(pi > 0 ? pi - 1 : phases.length > 2 ? 0 : null);
+                                }}
+                                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Elimination Settings */}
+                        <div className="mb-5 p-4 bg-white rounded-xl border border-gray-100">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Filter className="w-4 h-4 text-amber-500" />
+                              <span className="text-sm font-bold text-elm-navy">تصفية هذه المرحلة</span>
+                            </div>
+                            <button
+                              onClick={() => updatePhase({ isElimination: !phase.isElimination })}
+                              className={`w-10 h-6 rounded-full transition-colors relative ${phase.isElimination ? "bg-amber-500" : "bg-gray-200"}`}
+                            >
+                              <div className={`w-4 h-4 bg-white rounded-full shadow absolute top-1 transition-all ${phase.isElimination ? "left-1" : "right-1"}`} />
+                            </button>
+                          </div>
+                          {phase.isElimination && (
+                            <div className="mt-4 grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">آلية التصفية</label>
+                                <select
+                                  value={phase.eliminationMethod}
+                                  onChange={(e) => updatePhase({ eliminationMethod: e.target.value })}
+                                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-200"
+                                >
+                                  <option value="THRESHOLD">نسبة النجاح (حد أدنى)</option>
+                                  <option value="TOP_N">أفضل N مشارك/فريق</option>
+                                  <option value="PERCENTAGE">نسبة التأهل (%)</option>
+                                </select>
+                              </div>
+                              <div>
+                                {phase.eliminationMethod === "THRESHOLD" && (
+                                  <>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">الحد الأدنى للنجاح (%)</label>
+                                    <input type="number" value={phase.passThreshold} onChange={(e) => updatePhase({ passThreshold: Number(e.target.value) })} min={0} max={100} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-200" />
+                                  </>
+                                )}
+                                {phase.eliminationMethod === "TOP_N" && (
+                                  <>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">عدد المتأهلين</label>
+                                    <input type="number" value={phase.maxAdvancing} onChange={(e) => updatePhase({ maxAdvancing: Number(e.target.value) })} min={1} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-200" />
+                                  </>
+                                )}
+                                {phase.eliminationMethod === "PERCENTAGE" && (
+                                  <>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">نسبة التأهل (%)</label>
+                                    <input type="number" value={phase.advancePercent} onChange={(e) => updatePhase({ advancePercent: Number(e.target.value) })} min={0} max={100} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-200" />
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Phase Criteria */}
+                        <div className="p-4 bg-white rounded-xl border border-gray-100">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <Target className="w-4 h-4 text-brand-500" />
+                              <span className="text-sm font-bold text-elm-navy">معايير التقييم</span>
+                            </div>
+                            <span className="text-xs text-gray-400">{phase.criteria.length} معايير</span>
+                          </div>
+                          <div className="space-y-2">
+                            {phase.criteria.map((c, ci) => (
+                              <div key={ci} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                                <span className="w-6 h-6 bg-brand-50 rounded-lg flex items-center justify-center text-brand-500 text-xs font-bold">{ci + 1}</span>
+                                <input
+                                  type="text"
+                                  value={c.name}
+                                  onChange={(e) => {
+                                    const updated = [...phase.criteria];
+                                    updated[ci] = { ...updated[ci], name: e.target.value };
+                                    updatePhase({ criteria: updated });
+                                  }}
+                                  placeholder="اسم المعيار"
+                                  className="flex-1 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-200"
+                                />
+                                <input
+                                  type="number"
+                                  value={c.maxScore}
+                                  onChange={(e) => {
+                                    const updated = [...phase.criteria];
+                                    updated[ci] = { ...updated[ci], maxScore: Math.max(0, Number(e.target.value) || 0) };
+                                    updatePhase({ criteria: updated });
+                                  }}
+                                  min={0}
+                                  className="w-16 px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-brand-200"
+                                />
+                                <span className="text-xs text-gray-400">نقطة</span>
+                                <button
+                                  onClick={() => updatePhase({ criteria: phase.criteria.filter((_, i) => i !== ci) })}
+                                  className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors text-sm"
+                                >
+                                  &times;
+                                </button>
+                              </div>
+                            ))}
+                            <button
+                              onClick={() => updatePhase({ criteria: [...phase.criteria, { name: "", maxScore: 10 }] })}
+                              className="w-full p-2.5 border-2 border-dashed border-gray-200 rounded-xl text-xs text-gray-500 hover:border-brand-300 hover:text-brand-500 transition-colors"
+                            >
+                              + إضافة معيار
+                            </button>
+                            <div className="flex justify-end">
+                              <div className={`px-3 py-1.5 rounded-lg text-xs ${phaseCriteriaTotal === 100 ? "bg-elm-navy text-white" : "bg-amber-50 text-amber-700"}`}>
+                                المجموع: <span className="font-bold">{phaseCriteriaTotal}</span> نقطة
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Add Phase Button */}
+                  <button
+                    onClick={() => {
+                      const newPhase: PhaseConfig = { name: `المرحلة ${phases.length + 1}`, type: "GENERAL", isElimination: false, eliminationMethod: "THRESHOLD", passThreshold: 50, maxAdvancing: 10, advancePercent: 50, criteria: [] };
+                      setPhases(prev => [...prev, newPhase]);
+                      setExpandedPhase(phases.length);
+                    }}
+                    className="w-full p-3 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-500 hover:border-brand-300 hover:text-brand-500 transition-colors"
+                  >
+                    + إضافة مرحلة جديدة
+                  </button>
                 </div>
               )}
             </div>
@@ -833,7 +1060,21 @@ export default function CreateEventPage() {
               </div>
               <div className="p-4 bg-gray-50 rounded-xl">
                 <p className="text-xs text-gray-400 mb-1">المراحل</p>
-                <p className="text-sm font-bold text-elm-navy">{hasPhases ? `${totalPhases} مراحل ${hasElimination ? "(مع تصفيات)" : ""}` : "بدون مراحل"}</p>
+                <p className="text-sm font-bold text-elm-navy">
+                  {hasPhases
+                    ? `${phases.length} مراحل ${hasElimination ? "(مع تصفيات)" : ""}`
+                    : "بدون مراحل"}
+                </p>
+                {hasPhases && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {phases.map((p, i) => (
+                      <span key={i} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] text-white ${phaseTypeColors[p.type] || "bg-gray-500"}`}>
+                        {p.name}
+                        {p.isElimination && <Filter className="w-2.5 h-2.5" />}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="p-4 bg-gray-50 rounded-xl">
                 <p className="text-xs text-gray-400 mb-1">تاريخ البداية</p>
