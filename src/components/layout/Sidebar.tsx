@@ -19,6 +19,7 @@ import {
   Trophy,
   BookOpen,
   ChevronDown,
+  Bot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -49,6 +50,12 @@ const navigation = [
       { nameAr: "جميع الفعاليات", href: "/organization/events", icon: Calendar },
       { nameAr: "الهاكاثونات", href: "/organization/events?type=HACKATHON", icon: Trophy },
       { nameAr: "التحديات", href: "/organization/events?type=CHALLENGE", icon: BookOpen },
+    ],
+  },
+  {
+    title: "الذكاء الاصطناعي",
+    items: [
+      { nameAr: "نماذج الذكاء الاصطناعي", href: "/ai-models", icon: Bot },
     ],
   },
   {
