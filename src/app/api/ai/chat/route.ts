@@ -142,7 +142,9 @@ export async function POST(request: NextRequest) {
       })),
     ];
 
-    // Step 1: Generate API key
+    // Step 1: Generate a fresh API key (invalidate cache to avoid stale keys)
+    cachedApiKey = null;
+    cacheExpiry = 0;
     const apiKey = await getNuhaApiKey();
     console.log("Got API key:", apiKey ? `yes (${apiKey.substring(0, 10)}...)` : "no");
 
@@ -161,6 +163,8 @@ export async function POST(request: NextRequest) {
     const chatHeaders: Record<string, string> = {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
+      app_id: NUHA_APP_ID,
+      app_key: NUHA_APP_KEY,
     };
 
     if (sessionId) {
