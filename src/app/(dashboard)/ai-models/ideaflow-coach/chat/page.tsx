@@ -90,9 +90,11 @@ export default function IdeaFlowChatPage() {
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to get response");
-
       const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.details || data.error || "Failed to get response");
+      }
 
       if (data.sessionId) {
         setSessionId(data.sessionId);
@@ -106,11 +108,12 @@ export default function IdeaFlowChatPage() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-    } catch {
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : "خطأ غير معروف";
       const errorMessage: Message = {
         id: generateId(),
         role: "assistant",
-        content: "عذراً، حدث خطأ أثناء الاتصال. حاول مرة أخرى.",
+        content: `عذراً، حدث خطأ: ${errMsg}`,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
