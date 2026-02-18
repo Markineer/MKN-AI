@@ -144,80 +144,91 @@ export async function POST(request: NextRequest) {
 
     // Step 1: Generate API key
     const apiKey = await getNuhaApiKey();
-    console.log("Got API key:", apiKey ? "yes" : "no");
+    console.log("Got API key:", apiKey ? `yes (${apiKey.substring(0, 10)}...)` : "no");
 
-    // Step 2: Build headers - try multiple auth approaches
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      app_id: NUHA_APP_ID,
-      app_key: NUHA_APP_KEY,
-    };
-
-    if (apiKey) {
-      headers["Authorization"] = `Bearer ${apiKey}`;
-    }
-
-    if (sessionId) {
-      headers["x-session-id"] = sessionId;
-      headers["x-enable-session"] = "true";
-    }
-
-    // Step 3: Call chat completions
-    const chatBody = JSON.stringify({
-      messages: apiMessages,
-    });
-
-    console.log("Calling Nuha chat API...");
-    const response = await fetch(`${NUHA_BASE_URL}/v1/chat/completions`, {
-      method: "POST",
-      headers,
-      body: chatBody,
-    });
-
-    const responseText = await response.text();
-    console.log("Nuha chat response:", response.status, responseText.substring(0, 500));
-
-    if (!response.ok) {
-      // If first attempt fails, retry without Authorization header
-      if (apiKey) {
-        console.log("Retrying without Bearer token...");
-        delete headers["Authorization"];
-        const retryResponse = await fetch(`${NUHA_BASE_URL}/v1/chat/completions`, {
-          method: "POST",
-          headers,
-          body: chatBody,
-        });
-
-        const retryText = await retryResponse.text();
-        console.log("Retry response:", retryResponse.status, retryText.substring(0, 500));
-
-        if (retryResponse.ok) {
-          const retryData = JSON.parse(retryText);
-          return NextResponse.json({
-            message: retryData.choices?.[0]?.message?.content || "عذراً، لم أتمكن من الرد.",
-            sessionId: sessionId || retryData.session_id || null,
-          });
-        }
-      }
-
+    if (!apiKey) {
       return NextResponse.json(
-        {
-          error: `فشل الاتصال بنموذج الذكاء الاصطناعي`,
-          details: responseText.substring(0, 200),
-          status: response.status,
-        },
+        { error: "فشل في توليد مفتاح API" },
         { status: 502 }
       );
     }
 
-    const data = JSON.parse(responseText);
-    const assistantMessage =
-      data.choices?.[0]?.message?.content || "عذراً، لم أتمكن من الرد.";
-
-    return NextResponse.json({
-      message: assistantMessage,
-      sessionId: sessionId || data.session_id || null,
+    const chatBody = JSON.stringify({
+      messages: apiMessages,
     });
+
+    // Try 3 different auth approaches
+    const authAttempts = [
+      // Attempt 1: Only Bearer token
+      {
+        label: "Bearer only",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+          ...(sessionId ? { "x-session-id": sessionId, "x-enable-session": "true" } : {}),
+        },
+      },
+      // Attempt 2: Bearer + app_id/app_key
+      {
+        label: "Bearer + app headers",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+          app_id: NUHA_APP_ID,
+          app_key: NUHA_APP_KEY,
+          ...(sessionId ? { "x-session-id": sessionId, "x-enable-session": "true" } : {}),
+        },
+      },
+      // Attempt 3: API key as x-api-key header
+      {
+        label: "x-api-key header",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          app_id: NUHA_APP_ID,
+          app_key: NUHA_APP_KEY,
+          ...(sessionId ? { "x-session-id": sessionId, "x-enable-session": "true" } : {}),
+        },
+      },
+    ];
+
+    let lastResponseText = "";
+    let lastStatus = 0;
+
+    for (const attempt of authAttempts) {
+      console.log(`Trying ${attempt.label}...`);
+      const response = await fetch(`${NUHA_BASE_URL}/v1/chat/completions`, {
+        method: "POST",
+        headers: attempt.headers,
+        body: chatBody,
+      });
+
+      const responseText = await response.text();
+      console.log(`${attempt.label} response:`, response.status, responseText.substring(0, 300));
+
+      if (response.ok) {
+        const data = JSON.parse(responseText);
+        const assistantMessage =
+          data.choices?.[0]?.message?.content || "عذراً، لم أتمكن من الرد.";
+        return NextResponse.json({
+          message: assistantMessage,
+          sessionId: sessionId || data.session_id || null,
+        });
+      }
+
+      lastResponseText = responseText;
+      lastStatus = response.status;
+    }
+
+    // All attempts failed
+      return NextResponse.json(
+        {
+          error: `فشل الاتصال بنموذج الذكاء الاصطناعي`,
+          details: lastResponseText.substring(0, 200),
+          status: lastStatus,
+        },
+        { status: 502 }
+      );
   } catch (error) {
     console.error("Chat API error:", error);
     return NextResponse.json(
