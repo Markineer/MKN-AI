@@ -154,81 +154,48 @@ export async function POST(request: NextRequest) {
     }
 
     const chatBody = JSON.stringify({
+      model: "nuha",
       messages: apiMessages,
     });
 
-    // Try 3 different auth approaches
-    const authAttempts = [
-      // Attempt 1: Only Bearer token
-      {
-        label: "Bearer only",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-          ...(sessionId ? { "x-session-id": sessionId, "x-enable-session": "true" } : {}),
-        },
-      },
-      // Attempt 2: Bearer + app_id/app_key
-      {
-        label: "Bearer + app headers",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-          app_id: NUHA_APP_ID,
-          app_key: NUHA_APP_KEY,
-          ...(sessionId ? { "x-session-id": sessionId, "x-enable-session": "true" } : {}),
-        },
-      },
-      // Attempt 3: API key as x-api-key header
-      {
-        label: "x-api-key header",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          app_id: NUHA_APP_ID,
-          app_key: NUHA_APP_KEY,
-          ...(sessionId ? { "x-session-id": sessionId, "x-enable-session": "true" } : {}),
-        },
-      },
-    ];
+    const chatHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    };
 
-    let lastResponseText = "";
-    let lastStatus = 0;
-
-    for (const attempt of authAttempts) {
-      console.log(`Trying ${attempt.label}...`);
-      const response = await fetch(`${NUHA_BASE_URL}/v1/chat/completions`, {
-        method: "POST",
-        headers: attempt.headers,
-        body: chatBody,
-      });
-
-      const responseText = await response.text();
-      console.log(`${attempt.label} response:`, response.status, responseText.substring(0, 300));
-
-      if (response.ok) {
-        const data = JSON.parse(responseText);
-        const assistantMessage =
-          data.choices?.[0]?.message?.content || "عذراً، لم أتمكن من الرد.";
-        return NextResponse.json({
-          message: assistantMessage,
-          sessionId: sessionId || data.session_id || null,
-        });
-      }
-
-      lastResponseText = responseText;
-      lastStatus = response.status;
+    if (sessionId) {
+      chatHeaders["x-session-id"] = sessionId;
+      chatHeaders["x-enable-session"] = "true";
     }
 
-    // All attempts failed
-      return NextResponse.json(
-        {
-          error: `فشل الاتصال بنموذج الذكاء الاصطناعي`,
-          details: lastResponseText.substring(0, 200),
-          status: lastStatus,
-        },
-        { status: 502 }
-      );
+    console.log("Sending chat request with Bearer auth...");
+    const response = await fetch(`${NUHA_BASE_URL}/v1/chat/completions`, {
+      method: "POST",
+      headers: chatHeaders,
+      body: chatBody,
+    });
+
+    const responseText = await response.text();
+    console.log("Chat response:", response.status, responseText.substring(0, 300));
+
+    if (response.ok) {
+      const data = JSON.parse(responseText);
+      const assistantMessage =
+        data.choices?.[0]?.message?.content || "عذراً، لم أتمكن من الرد.";
+      return NextResponse.json({
+        message: assistantMessage,
+        sessionId: sessionId || data.session_id || null,
+      });
+    }
+
+    return NextResponse.json(
+      {
+        error: `فشل الاتصال بنموذج الذكاء الاصطناعي`,
+        details: responseText.substring(0, 200),
+        status: response.status,
+      },
+      { status: 502 }
+    );
   } catch (error) {
     console.error("Chat API error:", error);
     return NextResponse.json(
