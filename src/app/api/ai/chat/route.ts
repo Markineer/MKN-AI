@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const NUHA_BASE_URL = "https://rabet-nuha.api.elm.sa";
+const NUHA_BASE_URL = "https://nuha.live";
 const NUHA_APP_ID = "7w3knsah";
 const NUHA_APP_KEY = "7a85bc1af7f440468d8ea2056e7ef65d";
 
-// Cache the generated API key
+// Cache the generated API key per user
 let cachedApiKey: string | null = null;
 let cacheExpiry: number = 0;
 
@@ -98,7 +98,7 @@ async function getNuhaApiKey(): Promise<string | null> {
         app_id: NUHA_APP_ID,
         app_key: NUHA_APP_KEY,
       },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ user_id: "ideaflow-coach-user" }),
     });
 
     const responseText = await response.text();
