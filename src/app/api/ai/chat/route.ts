@@ -4,10 +4,6 @@ const NUHA_BASE_URL = "https://rabet-nuha.api.elm.sa";
 const NUHA_APP_ID = "7w3knsah";
 const NUHA_APP_KEY = "7a85bc1af7f440468d8ea2056e7ef65d";
 
-// Cache the generated API key per user
-let cachedApiKey: string | null = null;
-let cacheExpiry: number = 0;
-
 const IDEAFLOW_SYSTEM_PROMPT = `You are the IdeaFlow Coach.
 
 Your job is to guide, not dominate. You must:
@@ -85,43 +81,9 @@ If the user says "Let's practice again.", "New problem.", or "Start over.", rest
 
 IMPORTANT: Always respond in Arabic.`;
 
-// Store the raw generate-key response for debugging
-let lastKeyResponse = "";
-
-async function getNuhaApiKey(): Promise<string | null> {
-  try {
-    const response = await fetch(`${NUHA_BASE_URL}/api/generate-key`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        app_id: NUHA_APP_ID,
-        app_key: NUHA_APP_KEY,
-      },
-      body: JSON.stringify({ user_id: "ideaflow-coach-user" }),
-    });
-
-    const responseText = await response.text();
-    lastKeyResponse = responseText;
-    console.log("Nuha generate-key raw response:", response.status, responseText);
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const data = JSON.parse(responseText);
-    console.log("Parsed generate-key fields:", Object.keys(data));
-    // Try all possible key field names
-    const key = data.key || data.api_key || data.apiKey || data.token || data.access_token;
-    console.log("Extracted key:", key ? `${key.substring(0, 15)}...` : "NULL");
-    return key || null;
-  } catch (error) {
-    console.error("Error generating Nuha API key:", error);
-    lastKeyResponse = String(error);
-    return null;
-  }
-}
-
 export async function POST(request: NextRequest) {
+  const debug: string[] = [];
+
   try {
     const body = await request.json();
     const { messages, sessionId } = body;
@@ -141,89 +103,146 @@ export async function POST(request: NextRequest) {
       })),
     ];
 
-    // Step 1: Generate a fresh API key
-    const apiKey = await getNuhaApiKey();
-
-    if (!apiKey) {
-      return NextResponse.json(
-        {
-          error: "فشل في توليد مفتاح API",
-          details: `generate-key response: ${lastKeyResponse.substring(0, 300)}`,
-        },
-        { status: 502 }
-      );
-    }
-
-    const keyPreview = apiKey.substring(0, 20);
-
     const chatBody = JSON.stringify({
       model: "nuha",
       messages: apiMessages,
     });
 
-    // Try both auth approaches and return whichever works
-    const attempts = [
+    // === Step 1: Try generating API key with different body formats ===
+    const generateKeyBodies = [
+      // Approach A: app creds in headers only
       {
-        label: "Bearer + app headers",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-          app_id: NUHA_APP_ID,
-          app_key: NUHA_APP_KEY,
-          ...(sessionId ? { "x-session-id": sessionId, "x-enable-session": "true" } : {}),
-        },
+        label: "creds-in-headers",
+        headers: { "Content-Type": "application/json", app_id: NUHA_APP_ID, app_key: NUHA_APP_KEY },
+        body: { user_id: "ideaflow-coach-user" },
       },
+      // Approach B: app creds in body too
       {
-        label: "Bearer only",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-          ...(sessionId ? { "x-session-id": sessionId, "x-enable-session": "true" } : {}),
-        },
-      },
-      {
-        label: "API key as api_key header",
-        headers: {
-          "Content-Type": "application/json",
-          api_key: apiKey,
-          app_id: NUHA_APP_ID,
-          app_key: NUHA_APP_KEY,
-          ...(sessionId ? { "x-session-id": sessionId, "x-enable-session": "true" } : {}),
-        },
+        label: "creds-in-body",
+        headers: { "Content-Type": "application/json", app_id: NUHA_APP_ID, app_key: NUHA_APP_KEY },
+        body: { user_id: "ideaflow-coach-user", app_id: NUHA_APP_ID, app_key: NUHA_APP_KEY },
       },
     ];
 
-    const results: string[] = [];
+    let generatedKey: string | null = null;
 
-    for (const attempt of attempts) {
-      console.log(`Chat attempt: ${attempt.label}...`);
-      const response = await fetch(`${NUHA_BASE_URL}/v1/chat/completions`, {
-        method: "POST",
-        headers: attempt.headers,
-        body: chatBody,
-      });
-
-      const responseText = await response.text();
-      console.log(`${attempt.label}:`, response.status, responseText.substring(0, 200));
-
-      if (response.ok) {
-        const data = JSON.parse(responseText);
-        const assistantMessage =
-          data.choices?.[0]?.message?.content || "عذراً، لم أتمكن من الرد.";
-        return NextResponse.json({
-          message: assistantMessage,
-          sessionId: sessionId || data.session_id || null,
+    for (const gk of generateKeyBodies) {
+      try {
+        const res = await fetch(`${NUHA_BASE_URL}/api/generate-key`, {
+          method: "POST",
+          headers: gk.headers,
+          body: JSON.stringify(gk.body),
         });
-      }
+        const text = await res.text();
+        debug.push(`genkey[${gk.label}] ${res.status}: ${text.substring(0, 120)}`);
 
-      results.push(`[${attempt.label}] ${response.status}: ${responseText.substring(0, 100)}`);
+        if (res.ok) {
+          const data = JSON.parse(text);
+          const key = data.key || data.api_key || data.apiKey || data.token || data.access_token;
+          if (key) {
+            generatedKey = key;
+            if (data.app_id) break; // Got a key with app_id - perfect
+          }
+        }
+      } catch (e) {
+        debug.push(`genkey[${gk.label}] error: ${e}`);
+      }
     }
 
-    // All failed - return diagnostic info
+    // === Step 2: Try chat with all possible auth combinations ===
+    const chatAttempts: Array<{
+      label: string;
+      headers: Record<string, string>;
+    }> = [];
+
+    // If we have a generated key, try it
+    if (generatedKey) {
+      chatAttempts.push(
+        {
+          label: "Bearer+generated",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${generatedKey}`,
+          },
+        },
+        {
+          label: "Bearer+generated+app",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${generatedKey}`,
+            app_id: NUHA_APP_ID,
+            app_key: NUHA_APP_KEY,
+          },
+        },
+      );
+    }
+
+    // Also try using app_key directly as Bearer token (skip generate-key)
+    chatAttempts.push(
+      {
+        label: "Bearer+appkey-direct",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${NUHA_APP_KEY}`,
+        },
+      },
+      {
+        label: "Bearer+appkey+appheaders",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${NUHA_APP_KEY}`,
+          app_id: NUHA_APP_ID,
+          app_key: NUHA_APP_KEY,
+        },
+      },
+      {
+        label: "appheaders-only",
+        headers: {
+          "Content-Type": "application/json",
+          app_id: NUHA_APP_ID,
+          app_key: NUHA_APP_KEY,
+        },
+      },
+    );
+
+    // Add session headers to all attempts
+    for (const attempt of chatAttempts) {
+      if (sessionId) {
+        attempt.headers["x-session-id"] = sessionId;
+        attempt.headers["x-enable-session"] = "true";
+      }
+    }
+
+    for (const attempt of chatAttempts) {
+      try {
+        const response = await fetch(`${NUHA_BASE_URL}/v1/chat/completions`, {
+          method: "POST",
+          headers: attempt.headers,
+          body: chatBody,
+        });
+
+        const responseText = await response.text();
+        debug.push(`chat[${attempt.label}] ${response.status}: ${responseText.substring(0, 80)}`);
+
+        if (response.ok) {
+          const data = JSON.parse(responseText);
+          const assistantMessage =
+            data.choices?.[0]?.message?.content || "عذراً، لم أتمكن من الرد.";
+          return NextResponse.json({
+            message: assistantMessage,
+            sessionId: sessionId || data.session_id || null,
+          });
+        }
+      } catch (e) {
+        debug.push(`chat[${attempt.label}] error: ${e}`);
+      }
+    }
+
+    // All failed
     return NextResponse.json(
       {
-        error: `فشل الاتصال بنموذج الذكاء الاصطناعي`,
-        details: `key=${keyPreview}... | generate-key-raw=${lastKeyResponse.substring(0, 150)} | ${results.join(" | ")}`,
+        error: "فشل الاتصال بنموذج الذكاء الاصطناعي",
+        details: debug.join(" | "),
       },
       { status: 502 }
     );
