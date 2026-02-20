@@ -297,7 +297,7 @@ async function main() {
       timezone: "Asia/Riyadh",
       location: "Princess Nourah bint Abdulrahman University + Remote",
       locationAr: "جامعة الأميرة نورة بنت عبدالرحمن - حضوري وعن بُعد",
-      isOnline: false, maxParticipants: 150,
+      isOnline: false, maxParticipants: 200,
       registrationMode: "TEAM", minTeamSize: 2, maxTeamSize: 5,
       allowIndividual: false, requireApproval: true,
       hasPhases: true, hasElimination: true, totalPhases: 5,
@@ -305,8 +305,8 @@ async function main() {
       aiEvaluationEnabled: true, aiGenerateQuestions: false, aiSolveAnswers: false,
       questionSource: "MANUAL",
       publishedAt: new Date("2026-02-18"),
-      rules: "- Team size: 2-5 members\n- At least one technical member required\n- Interdisciplinary teams prioritized\n- Target: Female students and graduates of PNU from all disciplines\n- Technologies: LLM, TTS, ASR\n- 30 seats per track",
-      rulesAr: "- حجم الفريق: 2-5 أعضاء\n- يجب وجود عضو تقني واحد على الأقل\n- الأولوية للفرق متعددة التخصصات\n- الفئة المستهدفة: طالبات وخريجات جامعة الأميرة نورة من جميع التخصصات\n- التقنيات: النماذج اللغوية الكبيرة، تحويل النص إلى كلام، التعرف التلقائي على الكلام\n- 30 مقعد لكل مسار",
+      rules: "- Team size: 2-5 members\n- At least one technical member required\n- Interdisciplinary teams prioritized\n- Target: Female students and graduates of PNU from all disciplines\n- Technologies: LLM, TTS, ASR\n- 40 seats per track",
+      rulesAr: "- حجم الفريق: 2-5 أعضاء\n- يجب وجود عضو تقني واحد على الأقل\n- الأولوية للفرق متعددة التخصصات\n- الفئة المستهدفة: طالبات وخريجات جامعة الأميرة نورة من جميع التخصصات\n- التقنيات: النماذج اللغوية الكبيرة، تحويل النص إلى كلام، التعرف التلقائي على الكلام\n- 40 مقعد لكل مسار",
       prizes: JSON.stringify([
         { rank: 1, label: "المركز الأول", labelEn: "1st Place", description: "جائزة نقدية كبرى + شهادة + احتضان المشروع + فرص عرض", descriptionEn: "Major cash prize + Certificate + Project incubation + Exhibition opportunities" },
         { rank: 2, label: "المركز الثاني", labelEn: "2nd Place", description: "جائزة نقدية + شهادة + تطوير مهني", descriptionEn: "Cash prize + Certificate + Professional development" },
@@ -413,7 +413,7 @@ async function main() {
       eventId: thakathon.id, name: "Hajj & Umrah", nameAr: "الحج والعمرة",
       description: "AI solutions for Hajj and Umrah services using Arabic NLP",
       descriptionAr: "حلول الذكاء الاصطناعي لخدمات الحج والعمرة باستخدام معالجة اللغة العربية",
-      domain: "GENERAL", color: "#D97706", maxTeams: 30, sortOrder: 1,
+      domain: "GENERAL", color: "#D97706", maxTeams: 40, sortOrder: 1,
     },
   });
 
@@ -422,7 +422,7 @@ async function main() {
       eventId: thakathon.id, name: "Tourism & Culture", nameAr: "السياحة والثقافة",
       description: "AI solutions for tourism and cultural experiences",
       descriptionAr: "حلول الذكاء الاصطناعي للسياحة والتجارب الثقافية",
-      domain: "TOURISM", color: "#059669", maxTeams: 30, sortOrder: 2,
+      domain: "TOURISM", color: "#059669", maxTeams: 40, sortOrder: 2,
     },
   });
 
@@ -431,7 +431,7 @@ async function main() {
       eventId: thakathon.id, name: "Law", nameAr: "القانون",
       description: "AI solutions for legal services and Arabic legal text processing",
       descriptionAr: "حلول الذكاء الاصطناعي للخدمات القانونية ومعالجة النصوص القانونية العربية",
-      domain: "LEGAL", color: "#7C3AED", maxTeams: 30, sortOrder: 3,
+      domain: "LEGAL", color: "#7C3AED", maxTeams: 40, sortOrder: 3,
     },
   });
 
@@ -440,7 +440,7 @@ async function main() {
       eventId: thakathon.id, name: "Education", nameAr: "التعليم",
       description: "AI solutions for education and Arabic learning",
       descriptionAr: "حلول الذكاء الاصطناعي للتعليم والتعلم بالعربية",
-      domain: "EDUCATION", color: "#2563EB", maxTeams: 30, sortOrder: 4,
+      domain: "EDUCATION", color: "#2563EB", maxTeams: 40, sortOrder: 4,
     },
   });
 
@@ -449,10 +449,10 @@ async function main() {
       eventId: thakathon.id, name: "Healthcare", nameAr: "الرعاية الصحية",
       description: "AI solutions for healthcare using Arabic NLP",
       descriptionAr: "حلول الذكاء الاصطناعي للرعاية الصحية باستخدام معالجة اللغة العربية",
-      domain: "HEALTH", color: "#DC2626", maxTeams: 30, sortOrder: 5,
+      domain: "HEALTH", color: "#DC2626", maxTeams: 40, sortOrder: 5,
     },
   });
-  console.log("  5 tracks created for ذكاءثون (30 seats each)");
+  console.log("  5 tracks created for ذكاءثون (40 seats each)");
 
   // ── 8. Create Event Phases ───────────────────────
   console.log("Creating event phases...");
