@@ -125,6 +125,18 @@ export async function GET() {
         const email = member.personal_email || member.university_email;
         if (!email) continue;
 
+        // Clean up old duplicate account if university email was used before
+        if (member.personal_email && member.university_email && member.personal_email !== member.university_email) {
+          const oldAccount = await prisma.user.findUnique({ where: { email: member.university_email } });
+          if (oldAccount) {
+            await prisma.eventMember.deleteMany({ where: { userId: oldAccount.id } });
+            await prisma.teamMember.deleteMany({ where: { userId: oldAccount.id } });
+            await prisma.userPlatformRole.deleteMany({ where: { userId: oldAccount.id } });
+            await prisma.notification.deleteMany({ where: { userId: oldAccount.id } });
+            await prisma.user.delete({ where: { id: oldAccount.id } });
+          }
+        }
+
         // Split Arabic name into first/last
         const nameParts = member.full_name.trim().split(/\s+/);
         const firstNameAr = nameParts[0] || member.full_name;
