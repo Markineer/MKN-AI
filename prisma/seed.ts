@@ -408,7 +408,7 @@ async function main() {
 
   // ── 7. Create Event Tracks ───────────────────────
   console.log("Creating event tracks...");
-  const trackHajj = await prisma.eventTrack.create({
+  await prisma.eventTrack.create({
     data: {
       eventId: thakathon.id, name: "Hajj & Umrah", nameAr: "الحج والعمرة",
       description: "AI solutions for Hajj and Umrah services using Arabic NLP",
@@ -417,7 +417,7 @@ async function main() {
     },
   });
 
-  const trackTourism = await prisma.eventTrack.create({
+  await prisma.eventTrack.create({
     data: {
       eventId: thakathon.id, name: "Tourism & Culture", nameAr: "السياحة والثقافة",
       description: "AI solutions for tourism and cultural experiences",
@@ -426,7 +426,7 @@ async function main() {
     },
   });
 
-  const trackLaw = await prisma.eventTrack.create({
+  await prisma.eventTrack.create({
     data: {
       eventId: thakathon.id, name: "Law", nameAr: "القانون",
       description: "AI solutions for legal services and Arabic legal text processing",
@@ -435,7 +435,7 @@ async function main() {
     },
   });
 
-  const trackEducation = await prisma.eventTrack.create({
+  await prisma.eventTrack.create({
     data: {
       eventId: thakathon.id, name: "Education", nameAr: "التعليم",
       description: "AI solutions for education and Arabic learning",
@@ -444,7 +444,7 @@ async function main() {
     },
   });
 
-  const trackHealthcare = await prisma.eventTrack.create({
+  await prisma.eventTrack.create({
     data: {
       eventId: thakathon.id, name: "Healthcare", nameAr: "الرعاية الصحية",
       description: "AI solutions for healthcare using Arabic NLP",
@@ -553,37 +553,7 @@ async function main() {
   }
   console.log("  8 event members assigned");
 
-  // ── 10. Create Teams ─────────────────────────────
-  console.log("Creating teams...");
-  const team1 = await prisma.team.create({
-    data: {
-      eventId: thakathon.id, trackId: trackHajj.id,
-      name: "Neural Pioneers", nameAr: "رواد الشبكات العصبية",
-      description: "AI/ML innovation team", status: "ACTIVE",
-      projectTitle: "Smart Document Analyzer", projectTitleAr: "محلل المستندات الذكي",
-      projectDescription: "AI-powered tool for analyzing documents using NLP",
-      projectDescriptionAr: "أداة ذكاء اصطناعي لتحليل وتلخيص المستندات باستخدام معالجة اللغة الطبيعية",
-    },
-  });
-
-  const team2 = await prisma.team.create({
-    data: {
-      eventId: thakathon.id, trackId: trackTourism.id,
-      name: "Smart Gov", nameAr: "فريق الحوكمة الذكية",
-      description: "Smart government services team", status: "ACTIVE",
-      projectTitle: "AI Service Assistant", projectTitleAr: "مساعد الخدمات الذكي",
-      projectDescription: "AI assistant for government services automation",
-      projectDescriptionAr: "مساعد ذكاء اصطناعي لأتمتة الخدمات الحكومية",
-    },
-  });
-
-  await prisma.teamMember.createMany({
-    data: [
-      { teamId: team1.id, userId: participant1.id, role: "LEADER" },
-      { teamId: team2.id, userId: participant2.id, role: "LEADER" },
-    ],
-  });
-  console.log("  2 teams created with members");
+  // ── 10. Teams are synced from Thakathon API (no seed data) ──
 
   // ── 11. Create Evaluation Criteria ───────────────
   console.log("Creating evaluation criteria...");
@@ -698,7 +668,7 @@ async function main() {
 
   console.log("\n=== Seed completed successfully! ===");
   console.log("Users: 10 | Roles: 10 | Permissions: 72");
-  console.log("Organizations: 5 | Events: 4 | Teams: 2");
+  console.log("Organizations: 5 | Events: 4 | Teams: synced from API");
   console.log("Login: admin@elm.sa / Admin@123");
 }
 
