@@ -283,29 +283,39 @@ async function main() {
   // ── 6. Create Events ─────────────────────────────
   console.log("\nCreating events...");
   const thakathon = await prisma.event.upsert({
-    where: { slug: "thakathon-2025" },
+    where: { slug: "thakathon-2026" },
     update: {},
     create: {
       organizationId: pnuOrg.id,
-      title: "Thaka'thon 2025", titleAr: "هاكاثون ذكاء ثون 2025",
-      slug: "thakathon-2025",
-      description: "The largest AI hackathon in Saudi Arabia hosted by Princess Nourah University",
-      descriptionAr: "أكبر هاكاثون للذكاء الاصطناعي في المملكة العربية السعودية تستضيفه جامعة الأميرة نورة بنت عبدالرحمن. يهدف ذكاء ثون إلى اكتشاف المواهب السعودية في مجال الذكاء الاصطناعي وتطوير حلول مبتكرة تخدم رؤية 2030",
+      title: "Thaka'thon 2026 - نبتكر بلغتنا", titleAr: "ذكاءثون 2026 - نبتكر بلغتنا",
+      slug: "thakathon-2026",
+      description: "AI Hackathon for Natural Language Processing of Arabic - Developing innovative solutions using AI technologies specialized in Arabic NLP, empowering participants to transform ideas into community-serving products. Organized by Princess Nourah bint Abdulrahman University (AI Center & College of Computer Science) in partnership with Elm Company.",
+      descriptionAr: "هاكاثون الذكاء الاصطناعي لمعالجة اللغة العربية - يهدف إلى تطوير حلول مبتكرة باستخدام تقنيات الذكاء الاصطناعي المتخصصة في معالجة اللغة العربية الطبيعية، لتمكين المشاركات من تحويل الأفكار إلى منتجات تخدم المجتمع. تنظمه جامعة الأميرة نورة بنت عبدالرحمن (مركز الذكاء الاصطناعي وكلية علوم الحاسب) بالشراكة مع شركة علم. التقنيات: النماذج اللغوية الكبيرة (LLM)، تحويل النص إلى كلام (TTS)، التعرف التلقائي على الكلام (ASR).",
       type: "HACKATHON", category: "AI_ML", status: "REGISTRATION_OPEN", visibility: "PUBLIC",
-      startDate: new Date("2025-04-15"), endDate: new Date("2025-04-17"),
-      registrationStart: new Date("2025-01-15"), registrationEnd: new Date("2025-04-01"),
-      location: "Riyadh", locationAr: "جامعة الأميرة نورة بنت عبدالرحمن - الرياض",
-      isOnline: false, maxParticipants: 250,
-      registrationMode: "TEAM", minTeamSize: 3, maxTeamSize: 5,
-      hasPhases: true, hasElimination: true, totalPhases: 3,
+      startDate: new Date("2026-03-30"), endDate: new Date("2026-04-29"),
+      registrationStart: new Date("2026-02-18"), registrationEnd: new Date("2026-03-05"),
+      timezone: "Asia/Riyadh",
+      location: "Princess Nourah bint Abdulrahman University + Remote",
+      locationAr: "جامعة الأميرة نورة بنت عبدالرحمن - حضوري وعن بُعد",
+      isOnline: false, maxParticipants: 150,
+      registrationMode: "TEAM", minTeamSize: 2, maxTeamSize: 5,
+      allowIndividual: false, requireApproval: true,
+      hasPhases: true, hasElimination: true, totalPhases: 5,
       primaryColor: "#EC4899", secondaryColor: "#14B8A6",
-      aiEvaluationEnabled: true, questionSource: "MIXED",
-      publishedAt: new Date("2025-01-15"),
+      aiEvaluationEnabled: true, aiGenerateQuestions: false, aiSolveAnswers: false,
+      questionSource: "MANUAL",
+      publishedAt: new Date("2026-02-18"),
+      rules: "- Team size: 2-5 members\n- At least one technical member required\n- Interdisciplinary teams prioritized\n- Target: Female students and graduates of PNU from all disciplines\n- Technologies: LLM, TTS, ASR\n- 30 seats per track",
+      rulesAr: "- حجم الفريق: 2-5 أعضاء\n- يجب وجود عضو تقني واحد على الأقل\n- الأولوية للفرق متعددة التخصصات\n- الفئة المستهدفة: طالبات وخريجات جامعة الأميرة نورة من جميع التخصصات\n- التقنيات: النماذج اللغوية الكبيرة، تحويل النص إلى كلام، التعرف التلقائي على الكلام\n- 30 مقعد لكل مسار",
       prizes: JSON.stringify([
-        { rank: 1, label: "المركز الأول", amount: 100000 },
-        { rank: 2, label: "المركز الثاني", amount: 50000 },
-        { rank: 3, label: "المركز الثالث", amount: 25000 },
+        { rank: 1, label: "المركز الأول", labelEn: "1st Place", description: "جائزة نقدية كبرى + شهادة + احتضان المشروع + فرص عرض", descriptionEn: "Major cash prize + Certificate + Project incubation + Exhibition opportunities" },
+        { rank: 2, label: "المركز الثاني", labelEn: "2nd Place", description: "جائزة نقدية + شهادة + تطوير مهني", descriptionEn: "Cash prize + Certificate + Professional development" },
+        { rank: 3, label: "المركز الثالث", labelEn: "3rd Place", description: "جائزة نقدية + شهادة + تطوير مهني", descriptionEn: "Cash prize + Certificate + Professional development" },
+        { rank: 0, label: "جميع المشاركات", labelEn: "All Participants", description: "شهادات من شركة علم وجامعة الأميرة نورة", descriptionEn: "Certificates from Elm Company and PNU" },
       ]),
+      aiModelConfig: JSON.stringify({
+        ideaflowCoach: { enabled: true, model: "nuha", provider: "elm-nuha" },
+      }),
     },
   });
 
@@ -378,58 +388,124 @@ async function main() {
 
   console.log("  4 events created");
 
+  // ── 6b. Clean up old data for re-seeding ────────
+  console.log("Cleaning up old event data for re-seeding...");
+  for (const ev of [thakathon, legalDarAlhekma, legalYamamah, legalImam]) {
+    await prisma.judgeAssignment.deleteMany({ where: { eventId: ev.id } });
+    const phaseIds = (await prisma.eventPhase.findMany({ where: { eventId: ev.id }, select: { id: true } })).map(p => p.id);
+    if (phaseIds.length > 0) {
+      await prisma.phaseCriteria.deleteMany({ where: { phaseId: { in: phaseIds } } });
+      await prisma.phaseResult.deleteMany({ where: { phaseId: { in: phaseIds } } });
+    }
+    await prisma.eventPhase.deleteMany({ where: { eventId: ev.id } });
+    await prisma.evaluationCriteria.deleteMany({ where: { eventId: ev.id } });
+    await prisma.teamMember.deleteMany({ where: { team: { eventId: ev.id } } });
+    await prisma.team.deleteMany({ where: { eventId: ev.id } });
+    await prisma.eventTrack.deleteMany({ where: { eventId: ev.id } });
+    await prisma.eventMember.deleteMany({ where: { eventId: ev.id } });
+  }
+  console.log("  Old event data cleaned");
+
   // ── 7. Create Event Tracks ───────────────────────
   console.log("Creating event tracks...");
-  const track1 = await prisma.eventTrack.create({
+  const trackHajj = await prisma.eventTrack.create({
     data: {
-      eventId: thakathon.id, name: "AI & Machine Learning", nameAr: "الذكاء الاصطناعي وتعلم الآلة",
-      descriptionAr: "مسار حلول الذكاء الاصطناعي وتعلم الآلة",
-      domain: "TECHNOLOGY", color: "#7C3AED", sortOrder: 1,
+      eventId: thakathon.id, name: "Hajj & Umrah", nameAr: "الحج والعمرة",
+      description: "AI solutions for Hajj and Umrah services using Arabic NLP",
+      descriptionAr: "حلول الذكاء الاصطناعي لخدمات الحج والعمرة باستخدام معالجة اللغة العربية",
+      domain: "GENERAL", color: "#D97706", maxTeams: 30, sortOrder: 1,
     },
   });
 
-  const track2 = await prisma.eventTrack.create({
+  const trackTourism = await prisma.eventTrack.create({
     data: {
-      eventId: thakathon.id, name: "Smart Services", nameAr: "الخدمات الذكية",
-      descriptionAr: "حلول ذكاء اصطناعي للخدمات الحكومية والخاصة",
-      domain: "GENERAL", color: "#059669", sortOrder: 2,
+      eventId: thakathon.id, name: "Tourism & Culture", nameAr: "السياحة والثقافة",
+      description: "AI solutions for tourism and cultural experiences",
+      descriptionAr: "حلول الذكاء الاصطناعي للسياحة والتجارب الثقافية",
+      domain: "TOURISM", color: "#059669", maxTeams: 30, sortOrder: 2,
     },
   });
 
-  await prisma.eventTrack.create({
+  const trackLaw = await prisma.eventTrack.create({
     data: {
-      eventId: thakathon.id, name: "Smart Education", nameAr: "التعليم الذكي",
-      descriptionAr: "الذكاء الاصطناعي في التعليم",
-      domain: "EDUCATION", color: "#2563EB", sortOrder: 3,
+      eventId: thakathon.id, name: "Law", nameAr: "القانون",
+      description: "AI solutions for legal services and Arabic legal text processing",
+      descriptionAr: "حلول الذكاء الاصطناعي للخدمات القانونية ومعالجة النصوص القانونية العربية",
+      domain: "LEGAL", color: "#7C3AED", maxTeams: 30, sortOrder: 3,
     },
   });
-  console.log("  3 tracks created for ذكاء ثون");
+
+  const trackEducation = await prisma.eventTrack.create({
+    data: {
+      eventId: thakathon.id, name: "Education", nameAr: "التعليم",
+      description: "AI solutions for education and Arabic learning",
+      descriptionAr: "حلول الذكاء الاصطناعي للتعليم والتعلم بالعربية",
+      domain: "EDUCATION", color: "#2563EB", maxTeams: 30, sortOrder: 4,
+    },
+  });
+
+  const trackHealthcare = await prisma.eventTrack.create({
+    data: {
+      eventId: thakathon.id, name: "Healthcare", nameAr: "الرعاية الصحية",
+      description: "AI solutions for healthcare using Arabic NLP",
+      descriptionAr: "حلول الذكاء الاصطناعي للرعاية الصحية باستخدام معالجة اللغة العربية",
+      domain: "HEALTH", color: "#DC2626", maxTeams: 30, sortOrder: 5,
+    },
+  });
+  console.log("  5 tracks created for ذكاءثون (30 seats each)");
 
   // ── 8. Create Event Phases ───────────────────────
   console.log("Creating event phases...");
+  // Phase 1: Registration (Feb 18 - Mar 5)
   await prisma.eventPhase.create({
     data: {
-      eventId: thakathon.id, name: "Registration & Ideas", nameAr: "التسجيل وتقديم الأفكار",
-      descriptionAr: "تسجيل الفرق وتقديم الأفكار الأولية",
+      eventId: thakathon.id, name: "Registration", nameAr: "التسجيل",
+      description: "Team registration and application submission",
+      descriptionAr: "تسجيل الفرق وتقديم الطلبات - حجم الفريق 2-5 أعضاء مع وجود عضو تقني واحد على الأقل",
       phaseNumber: 1, phaseType: "REGISTRATION", status: "ACTIVE",
-      startDate: new Date("2025-01-15"), endDate: new Date("2025-04-01"),
+      startDate: new Date("2026-02-18"), endDate: new Date("2026-03-05"),
     },
   });
+  // Phase 2: Idea Review & Screening (Mar 6 - Mar 15)
   await prisma.eventPhase.create({
     data: {
-      eventId: thakathon.id, name: "Development Phase", nameAr: "مرحلة التطوير",
-      descriptionAr: "تطوير المشاريع والحلول",
-      phaseNumber: 2, phaseType: "DEVELOPMENT", status: "UPCOMING",
-      startDate: new Date("2025-04-15"), endDate: new Date("2025-04-16"),
-      isElimination: true, passThreshold: 60, maxAdvancing: 20,
+      eventId: thakathon.id, name: "Idea Review & Screening", nameAr: "مراجعة الأفكار والفرز",
+      description: "Review submitted ideas and select teams to advance",
+      descriptionAr: "مراجعة الأفكار المقدمة واختيار الفرق المتأهلة للمرحلة التالية",
+      phaseNumber: 2, phaseType: "IDEA_REVIEW", status: "UPCOMING",
+      startDate: new Date("2026-03-06"), endDate: new Date("2026-03-15"),
+      isElimination: true, passThreshold: 60, advancementMode: "PER_TRACK",
     },
   });
+  // Phase 3: Development (Mar 16 - Apr 15)
   await prisma.eventPhase.create({
     data: {
-      eventId: thakathon.id, name: "Final Presentations", nameAr: "العروض النهائية",
-      descriptionAr: "العروض التقديمية النهائية والتحكيم",
-      phaseNumber: 3, phaseType: "FINALS", status: "UPCOMING",
-      startDate: new Date("2025-04-17"), endDate: new Date("2025-04-17"),
+      eventId: thakathon.id, name: "Development & Building", nameAr: "التطوير والبناء",
+      description: "Teams develop their AI solutions using LLM, TTS, and ASR technologies",
+      descriptionAr: "تطوير الحلول باستخدام تقنيات النماذج اللغوية الكبيرة وتحويل النص إلى كلام والتعرف التلقائي على الكلام",
+      phaseNumber: 3, phaseType: "DEVELOPMENT", status: "UPCOMING",
+      startDate: new Date("2026-03-16"), endDate: new Date("2026-04-15"),
+    },
+  });
+  // Phase 4: Final Presentations & Judging (Apr 16 - Apr 25)
+  await prisma.eventPhase.create({
+    data: {
+      eventId: thakathon.id, name: "Final Presentations & Judging", nameAr: "العروض النهائية والتحكيم",
+      description: "Teams present their solutions to the judging panel",
+      descriptionAr: "تقديم العروض النهائية أمام لجنة التحكيم وتقييم المشاريع",
+      phaseNumber: 4, phaseType: "FINALS", status: "UPCOMING",
+      startDate: new Date("2026-04-16"), endDate: new Date("2026-04-25"),
+      isElimination: true, passThreshold: 70, advancementMode: "PER_TRACK",
+    },
+  });
+  // Phase 5: Results Announcement (Apr 29)
+  await prisma.eventPhase.create({
+    data: {
+      eventId: thakathon.id, name: "Results Announcement", nameAr: "إعلان النتائج",
+      description: "Winners announcement and awards ceremony",
+      descriptionAr: "إعلان الفائزين وحفل التكريم وتوزيع الجوائز والشهادات",
+      phaseNumber: 5, phaseType: "JUDGING", status: "UPCOMING",
+      startDate: new Date("2026-04-29"), endDate: new Date("2026-04-29"),
     },
   });
 
@@ -456,7 +532,7 @@ async function main() {
       },
     });
   }
-  console.log("  9 phases created");
+  console.log("  11 phases created (5 for ذكاءثون + 6 for legal challenges)");
 
   // ── 9. Assign Event Members ──────────────────────
   console.log("Assigning event members...");
@@ -481,7 +557,7 @@ async function main() {
   console.log("Creating teams...");
   const team1 = await prisma.team.create({
     data: {
-      eventId: thakathon.id, trackId: track1.id,
+      eventId: thakathon.id, trackId: trackHajj.id,
       name: "Neural Pioneers", nameAr: "رواد الشبكات العصبية",
       description: "AI/ML innovation team", status: "ACTIVE",
       projectTitle: "Smart Document Analyzer", projectTitleAr: "محلل المستندات الذكي",
@@ -492,7 +568,7 @@ async function main() {
 
   const team2 = await prisma.team.create({
     data: {
-      eventId: thakathon.id, trackId: track2.id,
+      eventId: thakathon.id, trackId: trackTourism.id,
       name: "Smart Gov", nameAr: "فريق الحوكمة الذكية",
       description: "Smart government services team", status: "ACTIVE",
       projectTitle: "AI Service Assistant", projectTitleAr: "مساعد الخدمات الذكي",
@@ -513,14 +589,15 @@ async function main() {
   console.log("Creating evaluation criteria...");
   await prisma.evaluationCriteria.createMany({
     data: [
-      { eventId: thakathon.id, name: "Innovation", nameAr: "الابتكار", descriptionAr: "أصالة الفكرة وإبداعها", weight: 1.5, maxScore: 10, sortOrder: 1 },
-      { eventId: thakathon.id, name: "Technical Implementation", nameAr: "التنفيذ التقني", descriptionAr: "جودة الكود والهندسة المعمارية", weight: 1.5, maxScore: 10, sortOrder: 2 },
-      { eventId: thakathon.id, name: "Impact", nameAr: "الأثر", descriptionAr: "الأثر المحتمل وفائدة الحل", weight: 1.0, maxScore: 10, sortOrder: 3 },
-      { eventId: thakathon.id, name: "Presentation", nameAr: "العرض التقديمي", descriptionAr: "وضوح وجودة العرض", weight: 1.0, maxScore: 10, sortOrder: 4 },
-      { eventId: thakathon.id, name: "Business Viability", nameAr: "الجدوى التجارية", descriptionAr: "إمكانية التسويق والجدوى", weight: 1.0, maxScore: 10, sortOrder: 5 },
+      { eventId: thakathon.id, name: "Innovation & Creativity", nameAr: "الابتكار والإبداع", description: "Originality of the idea and creative approach", descriptionAr: "أصالة الفكرة والنهج الإبداعي في حل المشكلة", weight: 2.0, maxScore: 10, sortOrder: 1 },
+      { eventId: thakathon.id, name: "Real-World Problem Solving", nameAr: "حل المشكلات الواقعية", description: "Addressing a real community need", descriptionAr: "معالجة حاجة مجتمعية حقيقية وتقديم حل عملي", weight: 1.5, maxScore: 10, sortOrder: 2 },
+      { eventId: thakathon.id, name: "AI Implementation Quality", nameAr: "جودة تطبيق الذكاء الاصطناعي", description: "Quality of LLM, TTS, ASR implementation for Arabic", descriptionAr: "جودة تطبيق النماذج اللغوية الكبيرة وتحويل النص لكلام والتعرف على الكلام للعربية", weight: 2.0, maxScore: 10, sortOrder: 3 },
+      { eventId: thakathon.id, name: "Feasibility & Scalability", nameAr: "الجدوى وقابلية التوسع", description: "Technical feasibility and potential for scaling", descriptionAr: "الجدوى التقنية وإمكانية التوسع والتطبيق على نطاق أوسع", weight: 1.5, maxScore: 10, sortOrder: 4 },
+      { eventId: thakathon.id, name: "Presentation Quality", nameAr: "جودة العرض التقديمي", description: "Clarity and quality of the presentation", descriptionAr: "وضوح وجودة العرض التقديمي والتواصل الفعال للفكرة", weight: 1.0, maxScore: 10, sortOrder: 5 },
+      { eventId: thakathon.id, name: "Expected Impact", nameAr: "الأثر المتوقع", description: "Potential community and social impact", descriptionAr: "الأثر المجتمعي والاجتماعي المتوقع من تطبيق الحل", weight: 1.0, maxScore: 10, sortOrder: 6 },
     ],
   });
-  console.log("  5 evaluation criteria created");
+  console.log("  6 evaluation criteria created for ذكاءثون");
 
   // ── 12. Create Challenges & Questions ────────────
   console.log("Creating challenges and questions...");
