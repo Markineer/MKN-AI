@@ -122,19 +122,25 @@ export default function TeamsPage() {
       )
     : teams;
 
-  // Parse bio into structured data
+  // Parse bio into structured data (supports both labeled and legacy formats)
   function parseBio(bio: string | null): { college?: string; major?: string; role?: string; uniEmail?: string; studentId?: string; techLink?: string } {
     if (!bio) return {};
     const parts = bio.split(" | ");
     const result: any = {};
+    const unlabeled: string[] = [];
     for (const part of parts) {
-      if (part.startsWith("الإيميل الجامعي:")) result.uniEmail = part.replace("الإيميل الجامعي:", "").trim();
-      else if (part.startsWith("الرقم الجامعي:")) result.studentId = part.replace("الرقم الجامعي:", "").trim();
-      else if (part.startsWith("الملف التقني:")) result.techLink = part.replace("الملف التقني:", "").trim();
-      else if (!result.college) result.college = part;
-      else if (!result.major) result.major = part;
-      else if (!result.role) result.role = part;
+      const trimmed = part.trim();
+      if (trimmed.startsWith("الكلية:")) result.college = trimmed.replace("الكلية:", "").trim();
+      else if (trimmed.startsWith("التخصص:")) result.major = trimmed.replace("التخصص:", "").trim();
+      else if (trimmed.startsWith("الدور:")) result.role = trimmed.replace("الدور:", "").trim();
+      else if (trimmed.startsWith("الإيميل الجامعي:")) result.uniEmail = trimmed.replace("الإيميل الجامعي:", "").trim();
+      else if (trimmed.startsWith("الرقم الجامعي:")) result.studentId = trimmed.replace("الرقم الجامعي:", "").trim();
+      else if (trimmed.startsWith("الملف التقني:")) result.techLink = trimmed.replace("الملف التقني:", "").trim();
+      else if (trimmed) unlabeled.push(trimmed);
     }
+    if (!result.college && unlabeled.length > 0) result.college = unlabeled[0];
+    if (!result.major && unlabeled.length > 1) result.major = unlabeled[1];
+    if (!result.role && unlabeled.length > 2) result.role = unlabeled[2];
     return result;
   }
 

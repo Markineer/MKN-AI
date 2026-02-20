@@ -131,25 +131,7 @@ async function main() {
     },
   });
 
-  const participant1 = await prisma.user.upsert({
-    where: { email: "student1@ksu.edu.sa" },
-    update: {},
-    create: {
-      email: "student1@ksu.edu.sa", password: hashedPassword,
-      firstName: "Nora", firstNameAr: "نورة", lastName: "Al-Dosari", lastNameAr: "الدوسري",
-      phone: "+966500000008", isActive: true, isVerified: true, language: "ar",
-    },
-  });
-
-  const participant2 = await prisma.user.upsert({
-    where: { email: "student2@kau.edu.sa" },
-    update: {},
-    create: {
-      email: "student2@kau.edu.sa", password: hashedPassword,
-      firstName: "Omar", firstNameAr: "عمر", lastName: "Al-Ghamdi", lastNameAr: "الغامدي",
-      phone: "+966500000009", isActive: true, isVerified: true, language: "ar",
-    },
-  });
+  // Participants are synced from Thakathon API (no seed data)
 
   const researcherUser = await prisma.user.upsert({
     where: { email: "researcher@ksu.edu.sa" },
@@ -176,8 +158,6 @@ async function main() {
     { userId: judgeUser.id, roleName: "judge" },
     { userId: mentorUser.id, roleName: "mentor" },
     { userId: expertUser.id, roleName: "expert" },
-    { userId: participant1.id, roleName: "participant" },
-    { userId: participant2.id, roleName: "participant" },
     { userId: researcherUser.id, roleName: "researcher" },
   ];
 
@@ -273,10 +253,6 @@ async function main() {
   await prisma.organizationMember.upsert({
     where: { organizationId_userId: { organizationId: imamOrg.id, userId: orgAdmin.id } },
     update: {}, create: { organizationId: imamOrg.id, userId: orgAdmin.id, role: "ADMIN" },
-  });
-  await prisma.organizationMember.upsert({
-    where: { organizationId_userId: { organizationId: yamamahOrg.id, userId: participant1.id } },
-    update: {}, create: { organizationId: yamamahOrg.id, userId: participant1.id, role: "MEMBER" },
   });
   console.log("  5 organizations created with members");
 
@@ -541,8 +517,6 @@ async function main() {
     { eventId: thakathon.id, userId: judgeUser.id, role: "JUDGE" as const },
     { eventId: thakathon.id, userId: mentorUser.id, role: "MENTOR" as const },
     { eventId: thakathon.id, userId: expertUser.id, role: "EXPERT" as const },
-    { eventId: thakathon.id, userId: participant1.id, role: "PARTICIPANT" as const },
-    { eventId: thakathon.id, userId: participant2.id, role: "PARTICIPANT" as const },
     { eventId: legalImam.id, userId: eventMgr.id, role: "ORGANIZER" as const },
     { eventId: legalImam.id, userId: judgeUser.id, role: "JUDGE" as const },
   ];
@@ -653,7 +627,6 @@ async function main() {
     data: [
       { userId: adminElm.id, type: "SYSTEM", title: "Welcome", titleAr: "مرحبا بك في مكن AI", message: "Platform ready", messageAr: "المنصة جاهزة للاستخدام" },
       { userId: adminElm.id, type: "EVENT", title: "Event Published", titleAr: "فعالية جديدة", message: "Thaka'thon published", messageAr: "تم نشر هاكاثون ذكاء ثون" },
-      { userId: participant1.id, type: "TEAM", title: "Team Approved", titleAr: "تم قبول الفريق", message: "Your team approved", messageAr: "تم قبول فريقك في ذكاء ثون" },
     ],
   });
 
