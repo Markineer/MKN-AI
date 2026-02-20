@@ -130,11 +130,11 @@ export async function GET() {
         const firstNameAr = nameParts[0] || member.full_name;
         const lastNameAr = nameParts.slice(1).join(" ") || "";
 
-        // Build bio with all registration data
+        // Build bio with labeled fields for reliable parsing
         const bioLines = [
-          member.college,
-          member.major,
-          member.role,
+          member.college ? `الكلية: ${member.college}` : "",
+          member.major ? `التخصص: ${member.major}` : "",
+          member.role ? `الدور: ${member.role}` : "",
           member.university_email ? `الإيميل الجامعي: ${member.university_email}` : "",
           member.student_id ? `الرقم الجامعي: ${member.student_id}` : "",
           member.tech_link ? `الملف التقني: ${member.tech_link}` : "",

@@ -75,7 +75,7 @@ interface Stats {
   members: number;
 }
 
-// Parse bio string into structured data
+// Parse bio string into structured data (supports both labeled and legacy formats)
 function parseBio(bio: string | null): {
   college?: string;
   major?: string;
@@ -87,18 +87,27 @@ function parseBio(bio: string | null): {
   if (!bio) return {};
   const parts = bio.split(" | ");
   const result: any = {};
+  const unlabeled: string[] = [];
   for (const part of parts) {
     const trimmed = part.trim();
-    if (trimmed.startsWith("الإيميل الجامعي:"))
+    if (trimmed.startsWith("الكلية:"))
+      result.college = trimmed.replace("الكلية:", "").trim();
+    else if (trimmed.startsWith("التخصص:"))
+      result.major = trimmed.replace("التخصص:", "").trim();
+    else if (trimmed.startsWith("الدور:"))
+      result.role = trimmed.replace("الدور:", "").trim();
+    else if (trimmed.startsWith("الإيميل الجامعي:"))
       result.uniEmail = trimmed.replace("الإيميل الجامعي:", "").trim();
     else if (trimmed.startsWith("الرقم الجامعي:"))
       result.studentId = trimmed.replace("الرقم الجامعي:", "").trim();
     else if (trimmed.startsWith("الملف التقني:"))
       result.techLink = trimmed.replace("الملف التقني:", "").trim();
-    else if (!result.college) result.college = trimmed;
-    else if (!result.major) result.major = trimmed;
-    else if (!result.role) result.role = trimmed;
+    else if (trimmed) unlabeled.push(trimmed);
   }
+  // Fallback for legacy unlabeled format: college, major, role
+  if (!result.college && unlabeled.length > 0) result.college = unlabeled[0];
+  if (!result.major && unlabeled.length > 1) result.major = unlabeled[1];
+  if (!result.role && unlabeled.length > 2) result.role = unlabeled[2];
   return result;
 }
 
