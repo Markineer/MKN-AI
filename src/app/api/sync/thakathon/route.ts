@@ -140,6 +140,15 @@ export async function GET() {
           member.tech_link ? `الملف التقني: ${member.tech_link}` : "",
         ].filter(Boolean).join(" | ");
 
+        // Check if nationalId already taken by another user
+        let safeNationalId: string | null = member.student_id || null;
+        if (safeNationalId) {
+          const existing = await prisma.user.findUnique({ where: { nationalId: safeNationalId } });
+          if (existing && existing.email !== email) {
+            safeNationalId = null; // Skip to avoid unique constraint error
+          }
+        }
+
         // Upsert user with personal email
         const user = await prisma.user.upsert({
           where: { email },
@@ -148,6 +157,7 @@ export async function GET() {
             lastNameAr,
             bio: bioLines,
             bioAr: bioLines,
+            nationalId: safeNationalId,
           },
           create: {
             email,
@@ -162,7 +172,7 @@ export async function GET() {
             language: "ar",
             bio: bioLines,
             bioAr: bioLines,
-            nationalId: member.student_id || null,
+            nationalId: safeNationalId,
           },
         });
         usersCreated++;
