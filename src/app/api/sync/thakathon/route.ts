@@ -121,7 +121,8 @@ export async function GET() {
 
       // Sync team members
       for (const member of apiTeam.members) {
-        const email = member.university_email || member.personal_email;
+        // Use personal email as the primary account email
+        const email = member.personal_email || member.university_email;
         if (!email) continue;
 
         // Split Arabic name into first/last
@@ -129,13 +130,24 @@ export async function GET() {
         const firstNameAr = nameParts[0] || member.full_name;
         const lastNameAr = nameParts.slice(1).join(" ") || "";
 
-        // Upsert user
+        // Build bio with all registration data
+        const bioLines = [
+          member.college,
+          member.major,
+          member.role,
+          member.university_email ? `الإيميل الجامعي: ${member.university_email}` : "",
+          member.student_id ? `الرقم الجامعي: ${member.student_id}` : "",
+          member.tech_link ? `الملف التقني: ${member.tech_link}` : "",
+        ].filter(Boolean).join(" | ");
+
+        // Upsert user with personal email
         const user = await prisma.user.upsert({
           where: { email },
           update: {
             firstNameAr,
             lastNameAr,
-            bio: `${member.college} - ${member.major} | ${member.role}`,
+            bio: bioLines,
+            bioAr: bioLines,
           },
           create: {
             email,
@@ -148,7 +160,8 @@ export async function GET() {
             isActive: true,
             isVerified: true,
             language: "ar",
-            bio: `${member.college} - ${member.major} | ${member.role}`,
+            bio: bioLines,
+            bioAr: bioLines,
             nationalId: member.student_id || null,
           },
         });
