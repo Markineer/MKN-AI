@@ -20,6 +20,8 @@ import {
   BookOpen,
   ChevronDown,
   Bot,
+  ClipboardCheck,
+  Gavel,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -29,7 +31,8 @@ interface SidebarProps {
   userNameAr: string;
 }
 
-const navigation = [
+// Navigation items with role-based access
+const adminNavigation = [
   {
     title: "الرئيسية",
     items: [
@@ -75,19 +78,34 @@ const navigation = [
   },
 ];
 
+const judgeNavigation = [
+  {
+    title: "لوحة المحكم",
+    items: [
+      { nameAr: "الفعاليات المعينة", href: "/judge", icon: ClipboardCheck },
+    ],
+  },
+];
+
 export default function Sidebar({ userRoles, userNameAr }: SidebarProps) {
   const pathname = usePathname();
-  const isSuperAdmin = userRoles.includes("super_admin") || userRoles.includes("platform_admin");
+  const isAdmin = userRoles.includes("super_admin") || userRoles.includes("platform_admin");
+  const isJudge = userRoles.includes("judge");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const toggle = (title: string) =>
     setCollapsed((prev) => ({ ...prev, [title]: !prev[title] }));
 
+  // Select navigation based on role
+  const navigation = isAdmin ? adminNavigation : isJudge ? judgeNavigation : adminNavigation;
+  const homeHref = isAdmin ? "/admin" : isJudge ? "/judge" : "/admin";
+  const roleLabel = isAdmin ? "مدير أعلى" : isJudge ? "محكّم" : "مستخدم";
+
   return (
     <aside className="w-72 h-screen bg-white border-l border-gray-100/80 flex flex-col fixed right-0 top-0 z-40">
       {/* Logo */}
       <div className="p-5 border-b border-gray-50">
-        <Link href="/admin" className="flex items-center gap-3 group cursor-pointer">
+        <Link href={homeHref} className="flex items-center gap-3 group cursor-pointer">
           <Image
             src="/images/LOGO.jpg"
             alt="علم elm"
@@ -130,7 +148,7 @@ export default function Sidebar({ userRoles, userNameAr }: SidebarProps) {
                 {group.items.map((item) => {
                   const isActive =
                     pathname === item.href ||
-                    (item.href !== "/admin" && pathname.startsWith(item.href.split("?")[0]));
+                    (item.href !== "/admin" && item.href !== "/judge" && pathname.startsWith(item.href.split("?")[0]));
                   return (
                     <Link
                       key={item.href}
@@ -170,7 +188,7 @@ export default function Sidebar({ userRoles, userNameAr }: SidebarProps) {
               {userNameAr}
             </p>
             <p className="text-[11px] text-gray-400">
-              {isSuperAdmin ? "مدير أعلى" : "مستخدم"}
+              {roleLabel}
             </p>
           </div>
           <button
