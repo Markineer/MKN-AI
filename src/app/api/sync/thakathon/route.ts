@@ -9,6 +9,7 @@ const THAKATHON_SLUG = "thakathon-2026";
 const TRACK_MAP: Record<string, string> = {
   education: "التعليم",
   tourism: "السياحة والثقافة",
+  health: "الرعاية الصحية",
   healthcare: "الرعاية الصحية",
   law: "القانون",
   hajj: "الحج والعمرة",
