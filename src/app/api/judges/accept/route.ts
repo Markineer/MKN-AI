@@ -76,17 +76,24 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Assign judge platform role
-  const judgeRole = await prisma.platformRole.findUnique({
+  // Assign judge platform role (create role if it doesn't exist)
+  const judgeRole = await prisma.platformRole.upsert({
     where: { name: "judge" },
+    update: {},
+    create: {
+      name: "judge",
+      nameAr: "محكّم",
+      description: "Judge role for event evaluation",
+      descriptionAr: "دور المحكّم لتقييم الفعاليات",
+      level: "JUDGE",
+      isSystem: true,
+    },
   });
-  if (judgeRole) {
-    await prisma.userPlatformRole.upsert({
-      where: { userId_roleId: { userId: user.id, roleId: judgeRole.id } },
-      update: {},
-      create: { userId: user.id, roleId: judgeRole.id },
-    });
-  }
+  await prisma.userPlatformRole.upsert({
+    where: { userId_roleId: { userId: user.id, roleId: judgeRole.id } },
+    update: {},
+    create: { userId: user.id, roleId: judgeRole.id },
+  });
 
   // Add as event JUDGE member
   const existingMember = await prisma.eventMember.findFirst({

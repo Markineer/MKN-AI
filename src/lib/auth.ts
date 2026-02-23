@@ -94,6 +94,16 @@ export const authOptions: NextAuthOptions = {
             }
           }
 
+          // Also detect judge role from EventMember records
+          if (!roles.includes("judge")) {
+            const judgeEventMember = await prisma.eventMember.findFirst({
+              where: { userId: user.id, role: "JUDGE" },
+            });
+            if (judgeEventMember) {
+              roles.push("judge");
+            }
+          }
+
           // Get organization memberships
           const orgMemberships = await prisma.organizationMember.findMany({
             where: { userId: user.id },

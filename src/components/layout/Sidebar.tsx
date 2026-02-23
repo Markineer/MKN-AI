@@ -91,15 +91,18 @@ export default function Sidebar({ userRoles, userNameAr }: SidebarProps) {
   const pathname = usePathname();
   const isAdmin = userRoles.includes("super_admin") || userRoles.includes("platform_admin");
   const isJudge = userRoles.includes("judge");
+  // Also detect judge by checking if user is on /judge path (for users without explicit role)
+  const isOnJudgePath = pathname.startsWith("/judge");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const toggle = (title: string) =>
     setCollapsed((prev) => ({ ...prev, [title]: !prev[title] }));
 
-  // Select navigation based on role
-  const navigation = isAdmin ? adminNavigation : isJudge ? judgeNavigation : adminNavigation;
-  const homeHref = isAdmin ? "/admin" : isJudge ? "/judge" : "/admin";
-  const roleLabel = isAdmin ? "مدير أعلى" : isJudge ? "محكّم" : "مستخدم";
+  // Select navigation based on role - judges NEVER see admin nav
+  const showJudgeNav = isJudge || isOnJudgePath;
+  const navigation = isAdmin && !showJudgeNav ? adminNavigation : showJudgeNav ? judgeNavigation : judgeNavigation;
+  const homeHref = isAdmin && !showJudgeNav ? "/admin" : "/judge";
+  const roleLabel = isAdmin ? "مدير أعلى" : "محكّم";
 
   return (
     <aside className="w-72 h-screen bg-white border-l border-gray-100/80 flex flex-col fixed right-0 top-0 z-40">
