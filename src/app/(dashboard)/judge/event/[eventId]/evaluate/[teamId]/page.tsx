@@ -78,6 +78,7 @@ export default function EvaluateTeamPage() {
   const [strengths, setStrengths] = useState("");
   const [weaknesses, setWeaknesses] = useState("");
   const [deliverables, setDeliverables] = useState<Deliverables | null>(null);
+  const [deliverableConfig, setDeliverableConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -93,6 +94,7 @@ export default function EvaluateTeamPage() {
         setCriteria(data.criteria || []);
         setTeam(data.team || null);
         if (data.deliverables) setDeliverables(data.deliverables);
+        if (data.deliverableConfig) setDeliverableConfig(data.deliverableConfig);
 
         // Initialize scores
         const initial: Record<string, number> = {};
@@ -239,72 +241,98 @@ export default function EvaluateTeamPage() {
         </div>
       )}
 
-      {/* Team Deliverables */}
-      {deliverables && (deliverables.repositoryUrl || deliverables.presentationUrl || deliverables.demoUrl || deliverables.miroBoard || deliverables.oneDriveUrl || deliverables.fileUrl || deliverables.projectTitle) && (
-        <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-6">
-          <h3 className="font-bold text-elm-navy mb-3 flex items-center gap-2 text-sm">
-            <FileText className="w-4 h-4 text-brand-500" />
-            تسليمات الفريق
-          </h3>
-          {deliverables.projectTitle && (
-            <div className="mb-3">
-              <p className="text-sm font-medium text-elm-navy">{deliverables.projectTitle}</p>
-              {deliverables.projectDescription && (
-                <p className="text-xs text-gray-500 mt-1 line-clamp-3">{deliverables.projectDescription}</p>
+      {/* Team Deliverables - filtered by phase config if available */}
+      {deliverables && (() => {
+        // Helper to check if a field should be shown
+        const shouldShow = (type: string): boolean => {
+          if (!deliverableConfig?.fields) return true; // no config = show all
+          const field = deliverableConfig.fields.find((f: any) => f.type === type);
+          return field?.enabled ?? false;
+        };
+        const getLabel = (type: string, fallback: string): string => {
+          if (!deliverableConfig?.fields) return fallback;
+          const field = deliverableConfig.fields.find((f: any) => f.type === type);
+          return field?.label || fallback;
+        };
+
+        const hasAny = (
+          (shouldShow("repository") && deliverables.repositoryUrl) ||
+          (shouldShow("presentation") && deliverables.presentationUrl) ||
+          (shouldShow("demo") && deliverables.demoUrl) ||
+          (shouldShow("miro") && deliverables.miroBoard) ||
+          (shouldShow("onedrive") && deliverables.oneDriveUrl) ||
+          (shouldShow("file") && deliverables.fileUrl) ||
+          (shouldShow("description") && (deliverables.projectTitle || deliverables.submissionContent))
+        );
+
+        if (!hasAny) return null;
+
+        return (
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-6">
+            <h3 className="font-bold text-elm-navy mb-3 flex items-center gap-2 text-sm">
+              <FileText className="w-4 h-4 text-brand-500" />
+              تسليمات الفريق
+            </h3>
+            {shouldShow("description") && deliverables.projectTitle && (
+              <div className="mb-3">
+                <p className="text-sm font-medium text-elm-navy">{deliverables.projectTitle}</p>
+                {deliverables.projectDescription && (
+                  <p className="text-xs text-gray-500 mt-1 line-clamp-3">{deliverables.projectDescription}</p>
+                )}
+              </div>
+            )}
+            {shouldShow("description") && deliverables.submissionContent && (
+              <div className="bg-gray-50 rounded-xl p-3 mb-3">
+                <p className="text-xs text-gray-600 whitespace-pre-wrap">{deliverables.submissionContent}</p>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-2">
+              {shouldShow("repository") && deliverables.repositoryUrl && (
+                <a href={deliverables.repositoryUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl text-xs hover:bg-brand-50 transition-colors group">
+                  <GitBranch className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
+                  <span className="text-gray-700 group-hover:text-brand-600 truncate">{getLabel("repository", "المستودع")}</span>
+                  <ExternalLink className="w-3 h-3 text-gray-300 mr-auto" />
+                </a>
+              )}
+              {shouldShow("presentation") && deliverables.presentationUrl && (
+                <a href={deliverables.presentationUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl text-xs hover:bg-brand-50 transition-colors group">
+                  <Presentation className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
+                  <span className="text-gray-700 group-hover:text-brand-600 truncate">{getLabel("presentation", "العرض التقديمي")}</span>
+                  <ExternalLink className="w-3 h-3 text-gray-300 mr-auto" />
+                </a>
+              )}
+              {shouldShow("demo") && deliverables.demoUrl && (
+                <a href={deliverables.demoUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl text-xs hover:bg-brand-50 transition-colors group">
+                  <Globe className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
+                  <span className="text-gray-700 group-hover:text-brand-600 truncate">{getLabel("demo", "النموذج التجريبي")}</span>
+                  <ExternalLink className="w-3 h-3 text-gray-300 mr-auto" />
+                </a>
+              )}
+              {shouldShow("miro") && deliverables.miroBoard && (
+                <a href={deliverables.miroBoard} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl text-xs hover:bg-brand-50 transition-colors group">
+                  <Link2 className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
+                  <span className="text-gray-700 group-hover:text-brand-600 truncate">{getLabel("miro", "لوحة ميرو")}</span>
+                  <ExternalLink className="w-3 h-3 text-gray-300 mr-auto" />
+                </a>
+              )}
+              {shouldShow("onedrive") && deliverables.oneDriveUrl && (
+                <a href={deliverables.oneDriveUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl text-xs hover:bg-brand-50 transition-colors group">
+                  <Link2 className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
+                  <span className="text-gray-700 group-hover:text-brand-600 truncate">{getLabel("onedrive", "ون درايف")}</span>
+                  <ExternalLink className="w-3 h-3 text-gray-300 mr-auto" />
+                </a>
+              )}
+              {shouldShow("file") && deliverables.fileUrl && (
+                <a href={deliverables.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl text-xs hover:bg-brand-50 transition-colors group">
+                  <FileText className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
+                  <span className="text-gray-700 group-hover:text-brand-600 truncate">{getLabel("file", "ملف مرفق")}</span>
+                  <ExternalLink className="w-3 h-3 text-gray-300 mr-auto" />
+                </a>
               )}
             </div>
-          )}
-          {deliverables.submissionContent && (
-            <div className="bg-gray-50 rounded-xl p-3 mb-3">
-              <p className="text-xs text-gray-600 whitespace-pre-wrap">{deliverables.submissionContent}</p>
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-2">
-            {deliverables.repositoryUrl && (
-              <a href={deliverables.repositoryUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl text-xs hover:bg-brand-50 transition-colors group">
-                <GitBranch className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
-                <span className="text-gray-700 group-hover:text-brand-600 truncate">المستودع</span>
-                <ExternalLink className="w-3 h-3 text-gray-300 mr-auto" />
-              </a>
-            )}
-            {deliverables.presentationUrl && (
-              <a href={deliverables.presentationUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl text-xs hover:bg-brand-50 transition-colors group">
-                <Presentation className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
-                <span className="text-gray-700 group-hover:text-brand-600 truncate">العرض التقديمي</span>
-                <ExternalLink className="w-3 h-3 text-gray-300 mr-auto" />
-              </a>
-            )}
-            {deliverables.demoUrl && (
-              <a href={deliverables.demoUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl text-xs hover:bg-brand-50 transition-colors group">
-                <Globe className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
-                <span className="text-gray-700 group-hover:text-brand-600 truncate">النموذج التجريبي</span>
-                <ExternalLink className="w-3 h-3 text-gray-300 mr-auto" />
-              </a>
-            )}
-            {deliverables.miroBoard && (
-              <a href={deliverables.miroBoard} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl text-xs hover:bg-brand-50 transition-colors group">
-                <Link2 className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
-                <span className="text-gray-700 group-hover:text-brand-600 truncate">لوحة ميرو</span>
-                <ExternalLink className="w-3 h-3 text-gray-300 mr-auto" />
-              </a>
-            )}
-            {deliverables.oneDriveUrl && (
-              <a href={deliverables.oneDriveUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl text-xs hover:bg-brand-50 transition-colors group">
-                <Link2 className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
-                <span className="text-gray-700 group-hover:text-brand-600 truncate">ون درايف</span>
-                <ExternalLink className="w-3 h-3 text-gray-300 mr-auto" />
-              </a>
-            )}
-            {deliverables.fileUrl && (
-              <a href={deliverables.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl text-xs hover:bg-brand-50 transition-colors group">
-                <FileText className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
-                <span className="text-gray-700 group-hover:text-brand-600 truncate">ملف مرفق</span>
-                <ExternalLink className="w-3 h-3 text-gray-300 mr-auto" />
-              </a>
-            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {error && (
         <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl mb-6 flex items-center gap-2">

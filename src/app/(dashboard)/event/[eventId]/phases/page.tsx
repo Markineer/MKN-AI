@@ -86,6 +86,20 @@ interface AutoFilterRule {
   minCount?: number;
 }
 
+interface DeliverableFieldConfig {
+  type: "repository" | "presentation" | "demo" | "miro" | "onedrive" | "file" | "description";
+  enabled: boolean;
+  required: boolean;
+  label: string;
+  allowFile?: boolean;
+  allowLink?: boolean;
+  providedUrl?: string;
+}
+
+interface DeliverableConfig {
+  fields: DeliverableFieldConfig[];
+}
+
 interface Phase {
   id: string;
   name: string;
@@ -102,6 +116,7 @@ interface Phase {
   evaluationMethod: EvaluationMethod | null;
   advancementMode: AdvancementMode;
   autoFilterRules: { rules: AutoFilterRule[] } | null;
+  deliverableConfig: DeliverableConfig | null;
   criteria: PhaseCriteria[];
   results: PhaseResult[];
   assignments: any[];
@@ -210,6 +225,32 @@ const DEFAULT_RULES: AutoFilterRule[] = [
   { type: "max_per_track", enabled: false, value: 10 },
 ];
 
+const DEFAULT_DELIVERABLE_FIELDS: DeliverableFieldConfig[] = [
+  { type: "description", enabled: true, required: true, label: "وصف المشروع" },
+  { type: "repository", enabled: false, required: false, label: "رابط GitHub" },
+  { type: "presentation", enabled: false, required: false, label: "العرض التقديمي", allowFile: false, allowLink: true },
+  { type: "demo", enabled: false, required: false, label: "رابط التجربة" },
+  { type: "miro", enabled: false, required: false, label: "لوحة Miro", providedUrl: "" },
+  { type: "onedrive", enabled: false, required: false, label: "OneDrive" },
+  { type: "file", enabled: false, required: false, label: "ملفات إضافية" },
+];
+
+const deliverableTypeLabels: Record<string, string> = {
+  description: "وصف المشروع",
+  repository: "رابط المستودع (GitHub)",
+  presentation: "العرض التقديمي",
+  demo: "رابط التجربة / النموذج",
+  miro: "لوحة Miro",
+  onedrive: "OneDrive",
+  file: "ملفات مرفقة",
+};
+
+const PHASE_PRESETS: Record<string, string[]> = {
+  idea_review: ["description", "miro"],
+  development: ["description", "repository", "presentation", "miro"],
+  finals: ["description", "repository", "presentation", "demo", "miro", "file"],
+};
+
 // ─── Phase Timeline ─────────────────────────────────────────
 function PhaseTimeline({ phases }: { phases: Phase[] }) {
   return (
@@ -286,7 +327,7 @@ function PhaseCard({
   onDelete: (phase: Phase) => void;
   onStatusChange: (phaseId: string, status: PhaseStatus) => void;
 }) {
-  type TabKey = "overview" | "criteria" | "results" | "autofilter" | "deliverables";
+  type TabKey = "overview" | "criteria" | "results" | "autofilter" | "deliverable-config" | "deliverables";
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const PhaseIcon = phaseTypeIcons[phase.phaseType];
   const statusCfg = statusConfig[phase.status];
@@ -299,6 +340,7 @@ function PhaseCard({
     { key: "criteria", label: "معايير التقييم", icon: Target, show: true },
     { key: "results", label: "النتائج والتصفية", icon: Trophy, show: true },
     { key: "autofilter", label: "التصفية التلقائية", icon: Zap, show: showAutoFilter },
+    { key: "deliverable-config", label: "إعدادات التسليمات", icon: Settings, show: true },
     { key: "deliverables", label: "التسليمات", icon: FileText, show: true },
   ];
 
@@ -442,6 +484,9 @@ function PhaseCard({
             )}
             {activeTab === "autofilter" && showAutoFilter && (
               <AutoFilterTab phase={phase} eventId={eventId} onRefresh={onRefresh} />
+            )}
+            {activeTab === "deliverable-config" && (
+              <DeliverableConfigTab phase={phase} eventId={eventId} onRefresh={onRefresh} />
             )}
             {activeTab === "deliverables" && (
               <DeliverablesTab phase={phase} eventId={eventId} />
@@ -1337,6 +1382,224 @@ function AutoFilterTab({
   );
 }
 
+// ─── Deliverable Config Tab ──────────────────────────────────
+function DeliverableConfigTab({
+  phase,
+  eventId,
+  onRefresh,
+}: {
+  phase: Phase;
+  eventId: string;
+  onRefresh: () => void;
+}) {
+  const [fields, setFields] = useState<DeliverableFieldConfig[]>(() => {
+    const existing = phase.deliverableConfig?.fields || [];
+    return DEFAULT_DELIVERABLE_FIELDS.map((def) => {
+      const found = existing.find((f) => f.type === def.type);
+      return found ? { ...def, ...found } : { ...def };
+    });
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const toggleField = (type: string) => {
+    setFields((prev) =>
+      prev.map((f) => (f.type === type ? { ...f, enabled: !f.enabled } : f))
+    );
+    setSaved(false);
+  };
+
+  const toggleRequired = (type: string) => {
+    setFields((prev) =>
+      prev.map((f) => (f.type === type ? { ...f, required: !f.required } : f))
+    );
+    setSaved(false);
+  };
+
+  const updateField = (type: string, key: string, value: any) => {
+    setFields((prev) =>
+      prev.map((f) => (f.type === type ? { ...f, [key]: value } : f))
+    );
+    setSaved(false);
+  };
+
+  const applyPreset = (presetKey: string) => {
+    const enabledTypes = PHASE_PRESETS[presetKey] || [];
+    setFields((prev) =>
+      prev.map((f) => ({
+        ...f,
+        enabled: enabledTypes.includes(f.type),
+        required: enabledTypes.includes(f.type),
+      }))
+    );
+    setSaved(false);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}/phases/${phase.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deliverableConfig: { fields } }),
+      });
+      if (!res.ok) throw new Error("فشل الحفظ");
+      setSaved(true);
+      onRefresh();
+    } catch (err) {
+      console.error("Save error:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const enabledCount = fields.filter((f) => f.enabled).length;
+  const requiredCount = fields.filter((f) => f.enabled && f.required).length;
+
+  return (
+    <div className="space-y-6">
+      {/* Header + Save */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h4 className="text-sm font-bold text-elm-navy">إعدادات التسليمات المطلوبة</h4>
+          <p className="text-[11px] text-gray-400 mt-0.5">
+            حدد ما يجب على الفرق تسليمه في هذه المرحلة ({enabledCount} مفعّل، {requiredCount} مطلوب)
+          </p>
+        </div>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 bg-brand-500 text-white rounded-xl text-xs font-bold hover:bg-brand-600 transition-colors disabled:opacity-50"
+        >
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : saved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+          {saved ? "تم الحفظ" : "حفظ الإعدادات"}
+        </button>
+      </div>
+
+      {/* Quick Presets */}
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] text-gray-400">قوالب سريعة:</span>
+        <button
+          onClick={() => applyPreset("idea_review")}
+          className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 hover:border-brand-300 hover:bg-brand-50 transition-colors font-medium"
+        >
+          مراجعة أفكار
+        </button>
+        <button
+          onClick={() => applyPreset("development")}
+          className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 hover:border-brand-300 hover:bg-brand-50 transition-colors font-medium"
+        >
+          تطوير
+        </button>
+        <button
+          onClick={() => applyPreset("finals")}
+          className="px-3 py-1.5 text-[11px] rounded-lg border border-gray-200 hover:border-brand-300 hover:bg-brand-50 transition-colors font-medium"
+        >
+          نهائيات
+        </button>
+      </div>
+
+      {/* Fields Configuration */}
+      <div className="space-y-3">
+        {fields.map((field) => (
+          <div
+            key={field.type}
+            className={`rounded-xl border p-4 transition-all ${
+              field.enabled ? "border-brand-200 bg-brand-50/30" : "border-gray-100 bg-gray-50/50"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <button onClick={() => toggleField(field.type)} className="text-gray-400 hover:text-brand-500 transition-colors">
+                  {field.enabled ? (
+                    <ToggleRight className="w-7 h-7 text-brand-500" />
+                  ) : (
+                    <ToggleLeft className="w-7 h-7" />
+                  )}
+                </button>
+                <div>
+                  <p className={`text-sm font-bold ${field.enabled ? "text-elm-navy" : "text-gray-400"}`}>
+                    {deliverableTypeLabels[field.type]}
+                  </p>
+                </div>
+              </div>
+
+              {field.enabled && (
+                <button
+                  onClick={() => toggleRequired(field.type)}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-colors ${
+                    field.required
+                      ? "bg-red-50 text-red-600 border border-red-200"
+                      : "bg-gray-100 text-gray-400 border border-gray-200"
+                  }`}
+                >
+                  {field.required ? "مطلوب" : "اختياري"}
+                </button>
+              )}
+            </div>
+
+            {/* Extended options when enabled */}
+            {field.enabled && (
+              <div className="mt-3 mr-10 space-y-2">
+                {/* Custom label */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-gray-400 w-16 shrink-0">التسمية:</span>
+                  <input
+                    type="text"
+                    value={field.label}
+                    onChange={(e) => updateField(field.type, "label", e.target.value)}
+                    className="flex-1 px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                    dir="rtl"
+                  />
+                </div>
+
+                {/* Presentation: allowFile + allowLink */}
+                {field.type === "presentation" && (
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                      <input
+                        type="checkbox"
+                        checked={field.allowLink !== false}
+                        onChange={(e) => updateField(field.type, "allowLink", e.target.checked)}
+                        className="rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+                      />
+                      رابط
+                    </label>
+                    <label className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                      <input
+                        type="checkbox"
+                        checked={field.allowFile === true}
+                        onChange={(e) => updateField(field.type, "allowFile", e.target.checked)}
+                        className="rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+                      />
+                      ملف
+                    </label>
+                  </div>
+                )}
+
+                {/* Miro: providedUrl */}
+                {field.type === "miro" && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-gray-400 w-16 shrink-0">رابط جاهز:</span>
+                    <input
+                      type="url"
+                      value={field.providedUrl || ""}
+                      onChange={(e) => updateField(field.type, "providedUrl", e.target.value)}
+                      placeholder="https://miro.com/app/board/..."
+                      className="flex-1 px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                      dir="ltr"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Deliverables Tab ───────────────────────────────────────
 function DeliverablesTab({
   phase,
@@ -1347,6 +1610,7 @@ function DeliverablesTab({
 }) {
   const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [stats, setStats] = useState<{ total: number; delivered: number; pending: number } | null>(null);
+  const [config, setConfig] = useState<DeliverableConfig | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -1358,6 +1622,7 @@ function DeliverablesTab({
         const data = await res.json();
         setDeliverables(data.deliverables || []);
         setStats(data.stats || null);
+        setConfig(data.deliverableConfig || null);
       } catch (err) {
         console.error("Failed to load deliverables:", err);
       } finally {
@@ -1391,6 +1656,25 @@ function DeliverablesTab({
           <div className="bg-amber-50 rounded-xl p-3 text-center">
             <p className="text-xl font-bold text-amber-700">{stats.pending}</p>
             <p className="text-[10px] text-amber-600">بانتظار التسليم</p>
+          </div>
+        </div>
+      )}
+
+      {/* Config Summary */}
+      {config && config.fields.some(f => f.enabled) && (
+        <div className="bg-brand-50/50 rounded-xl p-3 border border-brand-100">
+          <p className="text-[11px] font-bold text-brand-700 mb-2">التسليمات المطلوبة لهذه المرحلة:</p>
+          <div className="flex flex-wrap gap-2">
+            {config.fields.filter(f => f.enabled).map(f => (
+              <span
+                key={f.type}
+                className={`text-[10px] px-2 py-1 rounded-full font-medium ${
+                  f.required ? "bg-red-50 text-red-600 border border-red-200" : "bg-gray-100 text-gray-500 border border-gray-200"
+                }`}
+              >
+                {f.label} {f.required ? "(مطلوب)" : "(اختياري)"}
+              </span>
+            ))}
           </div>
         </div>
       )}

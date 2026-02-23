@@ -22,6 +22,7 @@ export async function PUT(
     evaluationMethod,
     advancementMode,
     autoFilterRules,
+    deliverableConfig,
   } = body;
 
   const phase = await prisma.eventPhase.update({
@@ -47,6 +48,7 @@ export async function PUT(
       }),
       ...(advancementMode !== undefined && { advancementMode }),
       ...(autoFilterRules !== undefined && { autoFilterRules }),
+      ...(deliverableConfig !== undefined && { deliverableConfig }),
     },
     include: { criteria: true, results: true },
   });

@@ -71,6 +71,7 @@ export async function POST(
     evaluationMethod,
     advancementMode = "OVERALL",
     autoFilterRules,
+    deliverableConfig,
   } = body;
 
   if (!nameAr || !startDate || !endDate) {
@@ -103,6 +104,7 @@ export async function POST(
       evaluationMethod: evaluationMethod || null,
       advancementMode,
       autoFilterRules: autoFilterRules || null,
+      deliverableConfig: deliverableConfig || null,
     },
     include: {
       criteria: true,

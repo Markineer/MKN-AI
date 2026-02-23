@@ -8,6 +8,12 @@ export async function GET(
 ) {
   const { id: eventId, phaseId } = params;
 
+  // Fetch phase deliverable config
+  const phase = await prisma.eventPhase.findUnique({
+    where: { id: phaseId },
+    select: { deliverableConfig: true },
+  });
+
   const teams = await prisma.team.findMany({
     where: { eventId, status: { not: "DISQUALIFIED" } },
     include: {
@@ -83,7 +89,11 @@ export async function GET(
     pending: deliverables.filter((d) => !d.hasDeliverable).length,
   };
 
-  return NextResponse.json({ deliverables, stats });
+  return NextResponse.json({
+    deliverables,
+    stats,
+    deliverableConfig: phase?.deliverableConfig || null,
+  });
 }
 
 // POST: submit team deliverables for a phase
@@ -97,6 +107,34 @@ export async function POST(
 
   if (!teamId) {
     return NextResponse.json({ error: "معرف الفريق مطلوب" }, { status: 400 });
+  }
+
+  // Validate required fields against phase deliverable config
+  const phase = await prisma.eventPhase.findUnique({
+    where: { id: phaseId },
+    select: { deliverableConfig: true },
+  });
+
+  const config = phase?.deliverableConfig as any;
+  if (config?.fields) {
+    const requiredFields = config.fields.filter((f: any) => f.enabled && f.required);
+    const fieldValues: Record<string, any> = {
+      repository: repositoryUrl,
+      presentation: links?.presentation || fileUrl,
+      demo: links?.demo,
+      miro: links?.miro,
+      onedrive: links?.onedrive,
+      file: fileUrl,
+      description: content,
+    };
+    for (const field of requiredFields) {
+      if (!fieldValues[field.type]) {
+        return NextResponse.json(
+          { error: `الحقل "${field.label}" مطلوب`, missingField: field.type },
+          { status: 400 }
+        );
+      }
+    }
   }
 
   // Update team-level links

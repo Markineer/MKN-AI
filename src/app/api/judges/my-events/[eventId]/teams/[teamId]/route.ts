@@ -98,6 +98,16 @@ export async function GET(
     submissionContent: latestSub?.content || null,
   };
 
+  // Fetch deliverable config for the phase (if provided)
+  let deliverableConfig = null;
+  if (phaseId) {
+    const phaseData = await prisma.eventPhase.findUnique({
+      where: { id: phaseId },
+      select: { deliverableConfig: true },
+    });
+    deliverableConfig = phaseData?.deliverableConfig || null;
+  }
+
   return NextResponse.json({
     team: {
       id: team.id,
@@ -114,6 +124,7 @@ export async function GET(
     criteria,
     existingEvaluation: existingEval || null,
     deliverables,
+    deliverableConfig,
     phaseId: phaseId || null,
   });
 }

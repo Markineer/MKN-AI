@@ -87,6 +87,15 @@ const judgeNavigation = [
   },
 ];
 
+const teamNavigation = [
+  {
+    title: "لوحة الفريق",
+    items: [
+      { nameAr: "فرقي وتسليماتي", href: "/team", icon: FileText },
+    ],
+  },
+];
+
 export default function Sidebar({ userRoles, userNameAr }: SidebarProps) {
   const pathname = usePathname();
   const isAdmin = userRoles.includes("super_admin") || userRoles.includes("platform_admin");
@@ -98,11 +107,21 @@ export default function Sidebar({ userRoles, userNameAr }: SidebarProps) {
   const toggle = (title: string) =>
     setCollapsed((prev) => ({ ...prev, [title]: !prev[title] }));
 
-  // Select navigation based on role - judges NEVER see admin nav
+  // Also detect team member by checking if user is on /team path
+  const isOnTeamPath = pathname.startsWith("/team");
+
+  // Select navigation based on role and current path
   const showJudgeNav = isJudge || isOnJudgePath;
-  const navigation = isAdmin && !showJudgeNav ? adminNavigation : showJudgeNav ? judgeNavigation : judgeNavigation;
-  const homeHref = isAdmin && !showJudgeNav ? "/admin" : "/judge";
-  const roleLabel = isAdmin ? "مدير أعلى" : "محكّم";
+  const showTeamNav = isOnTeamPath;
+  const navigation = showTeamNav
+    ? teamNavigation
+    : isAdmin && !showJudgeNav
+    ? adminNavigation
+    : showJudgeNav
+    ? judgeNavigation
+    : teamNavigation;
+  const homeHref = showTeamNav ? "/team" : isAdmin && !showJudgeNav ? "/admin" : "/judge";
+  const roleLabel = showTeamNav ? "مشارك" : isAdmin ? "مدير أعلى" : "محكّم";
 
   return (
     <aside className="w-72 h-screen bg-white border-l border-gray-100/80 flex flex-col fixed right-0 top-0 z-40">
