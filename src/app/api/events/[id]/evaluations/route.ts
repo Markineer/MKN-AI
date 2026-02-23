@@ -14,6 +14,7 @@ export async function GET(
   const { searchParams } = new URL(req.url);
   const teamId = searchParams.get("teamId");
   const evaluatorId = searchParams.get("evaluatorId");
+  const phaseId = searchParams.get("phaseId");
 
   const where: any = {
     submission: { eventId: params.id },
@@ -35,11 +36,19 @@ export async function GET(
     orderBy: { evaluatedAt: "desc" },
   });
 
-  // Get criteria for this event
-  const criteria = await prisma.evaluationCriteria.findMany({
-    where: { eventId: params.id, isActive: true },
-    orderBy: { sortOrder: "asc" },
-  });
+  // Get criteria: use phase criteria if phaseId provided, otherwise event-level
+  let criteria: any[];
+  if (phaseId) {
+    criteria = await prisma.phaseCriteria.findMany({
+      where: { phaseId, isActive: true },
+      orderBy: { sortOrder: "asc" },
+    });
+  } else {
+    criteria = await prisma.evaluationCriteria.findMany({
+      where: { eventId: params.id, isActive: true },
+      orderBy: { sortOrder: "asc" },
+    });
+  }
 
   // Get teams with their evaluations summary
   const teams = await prisma.team.findMany({
@@ -117,7 +126,7 @@ export async function POST(
 
   const userId = (session.user as any).id;
   const body = await req.json();
-  const { teamId, scores, feedback, feedbackAr, strengths, weaknesses } = body;
+  const { teamId, scores, feedback, feedbackAr, strengths, weaknesses, phaseId } = body;
 
   if (!teamId || !scores) {
     return NextResponse.json({ error: "teamId و scores مطلوبان" }, { status: 400 });
@@ -131,10 +140,17 @@ export async function POST(
     return NextResponse.json({ error: "أنت لست محكماً في هذه الفعالية" }, { status: 403 });
   }
 
-  // Get criteria and calculate weighted total
-  const criteria = await prisma.evaluationCriteria.findMany({
-    where: { eventId: params.id, isActive: true },
-  });
+  // Get criteria: use phase criteria if phaseId provided, otherwise event-level
+  let criteria: any[];
+  if (phaseId) {
+    criteria = await prisma.phaseCriteria.findMany({
+      where: { phaseId, isActive: true },
+    });
+  } else {
+    criteria = await prisma.evaluationCriteria.findMany({
+      where: { eventId: params.id, isActive: true },
+    });
+  }
 
   let weightedSum = 0;
   let totalWeight = 0;
@@ -216,6 +232,31 @@ export async function POST(
       completedAt: new Date(),
     },
   });
+
+  // Create/update PhaseResult if phaseId provided
+  if (phaseId) {
+    const roundedScore = Math.round(totalScore * 100) / 100;
+    const existingResult = await prisma.phaseResult.findFirst({
+      where: { phaseId, teamId, evaluatedBy: userId },
+    });
+    if (existingResult) {
+      await prisma.phaseResult.update({
+        where: { id: existingResult.id },
+        data: { totalScore: roundedScore, status: "EVALUATED", evaluatedAt: new Date() },
+      });
+    } else {
+      await prisma.phaseResult.create({
+        data: {
+          phaseId,
+          teamId,
+          totalScore: roundedScore,
+          status: "EVALUATED",
+          evaluatedBy: userId,
+          evaluatedAt: new Date(),
+        },
+      });
+    }
+  }
 
   return NextResponse.json({ evaluation, totalScore: Math.round(totalScore * 100) / 100 }, { status: 201 });
 }

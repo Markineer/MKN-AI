@@ -32,6 +32,7 @@ import {
   Zap,
   TrendingUp,
   Shield,
+  BarChart3,
 } from "lucide-react";
 
 interface EventDetail {
@@ -334,6 +335,7 @@ export default function EventDetailPage() {
     { href: `/event/${event.id}/questions`, label: "الأسئلة", icon: FileText, count: event.challenges.reduce((a, c) => a + c.questions.length, 0), color: "text-orange-500", bg: "bg-orange-50" },
     { href: `/event/${event.id}/criteria`, label: "معايير التقييم", icon: Target, count: event.evaluationCriteria.length, color: "text-pink-500", bg: "bg-pink-50" },
     { href: `/event/${event.id}/judges`, label: "المحكمين", icon: Scale, count: judges.length, color: "text-brand-500", bg: "bg-brand-50" },
+    { href: `/event/${event.id}/evaluations`, label: "نتائج التقييمات", icon: BarChart3, count: null, color: "text-rose-500", bg: "bg-rose-50" },
     { href: `/event/${event.id}/mentors`, label: "المرشدين", icon: GraduationCap, count: event.members.filter(m => m.role === "MENTOR").length, color: "text-teal-500", bg: "bg-teal-50" },
     { href: `/event/${event.id}/submissions`, label: "التقديمات", icon: FileText, count: event._count.submissions, color: "text-indigo-500", bg: "bg-indigo-50" },
     { href: `/event/${event.id}/certificates`, label: "الشهادات", icon: Award, count: event._count.certificates, color: "text-yellow-600", bg: "bg-yellow-50" },

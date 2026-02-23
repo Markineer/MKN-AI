@@ -173,3 +173,135 @@ export async function sendJudgeInvitationEmail({
 
   return data;
 }
+
+// ─── Phase Advancement Email ──────────────────────────────────
+
+interface PhaseAdvancementEmailParams {
+  to: string;
+  teamName: string;
+  eventName: string;
+  phaseName: string;
+  nextPhaseName?: string | null;
+}
+
+export async function sendPhaseAdvancementEmail({
+  to,
+  teamName,
+  eventName,
+  phaseName,
+  nextPhaseName,
+}: PhaseAdvancementEmailParams) {
+  const nextLine = nextPhaseName
+    ? `<p style="margin:16px 0 0;color:#065F46;font-size:14px;line-height:1.6;">المرحلة القادمة: <strong>${nextPhaseName}</strong></p>`
+    : "";
+
+  const html = `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#F9FAFB;font-family:'Cairo','Segoe UI',Tahoma,sans-serif;">
+  <div style="max-width:520px;margin:40px auto;background:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid #E5E7EB;">
+    <div style="background:linear-gradient(135deg,#059669,#047857);padding:32px 24px;text-align:center;">
+      <div style="font-size:48px;margin-bottom:8px;">&#127881;</div>
+      <h1 style="margin:0;color:#FFFFFF;font-size:22px;font-weight:800;">تهانينا! تأهل فريقكم</h1>
+      <p style="margin:8px 0 0;color:#A7F3D0;font-size:14px;">نتائج ${phaseName}</p>
+    </div>
+    <div style="padding:32px 24px;">
+      <p style="margin:0 0 20px;color:#1F2937;font-size:16px;line-height:1.7;">
+        مرحباً بأعضاء فريق <strong style="color:#059669;">${teamName}</strong>،
+      </p>
+      <p style="margin:0 0 20px;color:#374151;font-size:15px;line-height:1.7;">
+        يسعدنا إبلاغكم بأن فريقكم قد اجتاز <strong>${phaseName}</strong> بنجاح في فعالية <strong>${eventName}</strong>!
+      </p>
+      <div style="background:#ECFDF5;border-radius:12px;padding:20px;margin:0 0 24px;border:1px solid #A7F3D0;text-align:center;">
+        <p style="margin:0;color:#065F46;font-size:18px;font-weight:700;">متأهل للمرحلة التالية</p>
+        ${nextLine}
+      </div>
+      <p style="margin:0;color:#6B7280;font-size:14px;line-height:1.6;">
+        نتمنى لكم التوفيق والنجاح في المراحل القادمة. استمروا في العمل الرائع!
+      </p>
+    </div>
+    <div style="border-top:1px solid #E5E7EB;padding:16px 24px;text-align:center;">
+      <p style="margin:0;color:#9CA3AF;font-size:11px;">منصة مكن AI — من علم وماركنير</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const { data, error } = await resend.emails.send({
+    from: FROM,
+    to,
+    subject: `تهانينا! تأهل فريق ${teamName} | ${eventName} — مكن AI`,
+    html,
+  });
+
+  if (error) console.error("[mail] Failed to send advancement email:", error);
+  return data;
+}
+
+// ─── Phase Elimination Email ──────────────────────────────────
+
+interface PhaseEliminationEmailParams {
+  to: string;
+  teamName: string;
+  eventName: string;
+  phaseName: string;
+  feedback?: string | null;
+}
+
+export async function sendPhaseEliminationEmail({
+  to,
+  teamName,
+  eventName,
+  phaseName,
+  feedback,
+}: PhaseEliminationEmailParams) {
+  const feedbackLine = feedback
+    ? `<div style="background:#F3F4F6;border-radius:12px;padding:16px 20px;margin:0 0 24px;border:1px solid #E5E7EB;">
+        <p style="margin:0 0 4px;color:#6B7280;font-size:13px;font-weight:600;">ملاحظات:</p>
+        <p style="margin:0;color:#374151;font-size:14px;line-height:1.6;">${feedback}</p>
+      </div>`
+    : "";
+
+  const html = `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#F9FAFB;font-family:'Cairo','Segoe UI',Tahoma,sans-serif;">
+  <div style="max-width:520px;margin:40px auto;background:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid #E5E7EB;">
+    <div style="background:linear-gradient(135deg,#4B5563,#374151);padding:32px 24px;text-align:center;">
+      <h1 style="margin:0;color:#FFFFFF;font-size:22px;font-weight:800;">شكراً لمشاركتكم</h1>
+      <p style="margin:8px 0 0;color:#D1D5DB;font-size:14px;">نتائج ${phaseName}</p>
+    </div>
+    <div style="padding:32px 24px;">
+      <p style="margin:0 0 20px;color:#1F2937;font-size:16px;line-height:1.7;">
+        أعضاء فريق <strong>${teamName}</strong> الكرام،
+      </p>
+      <p style="margin:0 0 20px;color:#374151;font-size:15px;line-height:1.7;">
+        نشكركم على مشاركتكم المميزة في <strong>${phaseName}</strong> ضمن فعالية <strong>${eventName}</strong>. للأسف، لم يتأهل الفريق للمرحلة التالية هذه المرة.
+      </p>
+      ${feedbackLine}
+      <div style="background:#EFF6FF;border-radius:12px;padding:20px;margin:0 0 24px;border:1px solid #BFDBFE;">
+        <p style="margin:0;color:#1E40AF;font-size:14px;line-height:1.7;">
+          لا تيأسوا! كل تجربة هي فرصة للتعلم والنمو. نتطلع لرؤيتكم في فعاليات قادمة بإذن الله.
+        </p>
+      </div>
+      <p style="margin:0;color:#6B7280;font-size:14px;line-height:1.6;">نتمنى لكم كل التوفيق في مسيرتكم المهنية.</p>
+    </div>
+    <div style="border-top:1px solid #E5E7EB;padding:16px 24px;text-align:center;">
+      <p style="margin:0;color:#9CA3AF;font-size:11px;">منصة مكن AI — من علم وماركنير</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const { data, error } = await resend.emails.send({
+    from: FROM,
+    to,
+    subject: `نتائج ${phaseName} | ${eventName} — مكن AI`,
+    html,
+  });
+
+  if (error) console.error("[mail] Failed to send elimination email:", error);
+  return data;
+}

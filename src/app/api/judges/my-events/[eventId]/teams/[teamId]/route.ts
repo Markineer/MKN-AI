@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import prisma from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
-// GET: fetch team info + criteria + existing evaluation for judge
+// GET: fetch team info + criteria + existing evaluation + deliverables for judge
 export async function GET(
   req: NextRequest,
   { params }: { params: { eventId: string; teamId: string } }
@@ -13,6 +13,7 @@ export async function GET(
 
   const userId = (session.user as any).id;
   const { eventId, teamId } = params;
+  const phaseId = req.nextUrl.searchParams.get("phaseId");
 
   // Verify judge membership
   const judgeMember = await prisma.eventMember.findFirst({
@@ -23,7 +24,7 @@ export async function GET(
     return NextResponse.json({ error: "أنت لست محكماً في هذه الفعالية" }, { status: 403 });
   }
 
-  // Get team info
+  // Get team info with deliverables
   const team = await prisma.team.findUnique({
     where: { id: teamId },
     include: {
@@ -34,6 +35,15 @@ export async function GET(
           user: { select: { firstNameAr: true, firstName: true, lastNameAr: true, lastName: true } },
         },
       },
+      submissions: {
+        where: { type: "TEAM" },
+        orderBy: { createdAt: "desc" },
+        take: 3,
+        select: {
+          id: true, content: true, fileUrl: true, repositoryUrl: true,
+          metadata: true, status: true, submittedAt: true,
+        },
+      },
     },
   });
 
@@ -41,11 +51,19 @@ export async function GET(
     return NextResponse.json({ error: "الفريق غير موجود" }, { status: 404 });
   }
 
-  // Get criteria
-  const criteria = await prisma.evaluationCriteria.findMany({
-    where: { eventId, isActive: true },
-    orderBy: { sortOrder: "asc" },
-  });
+  // Get criteria: use phase criteria if phaseId provided, otherwise event-level
+  let criteria: any[];
+  if (phaseId) {
+    criteria = await prisma.phaseCriteria.findMany({
+      where: { phaseId, isActive: true },
+      orderBy: { sortOrder: "asc" },
+    });
+  } else {
+    criteria = await prisma.evaluationCriteria.findMany({
+      where: { eventId, isActive: true },
+      orderBy: { sortOrder: "asc" },
+    });
+  }
 
   // Check for existing evaluation by this judge
   const existingEval = await prisma.evaluation.findFirst({
@@ -64,6 +82,22 @@ export async function GET(
     },
   });
 
+  // Build deliverables from team fields + submissions
+  const latestSub = team.submissions[0];
+  const subMeta = (latestSub?.metadata as any) || {};
+
+  const deliverables = {
+    projectTitle: team.projectTitle || team.projectTitleAr || null,
+    projectDescription: team.projectDescription || team.projectDescriptionAr || null,
+    repositoryUrl: team.repositoryUrl || latestSub?.repositoryUrl || null,
+    presentationUrl: team.presentationUrl || subMeta.presentationUrl || null,
+    demoUrl: team.demoUrl || subMeta.demoUrl || null,
+    miroBoard: team.miroBoard || subMeta.miroUrl || null,
+    oneDriveUrl: subMeta.oneDriveUrl || null,
+    fileUrl: latestSub?.fileUrl || null,
+    submissionContent: latestSub?.content || null,
+  };
+
   return NextResponse.json({
     team: {
       id: team.id,
@@ -79,5 +113,7 @@ export async function GET(
     },
     criteria,
     existingEvaluation: existingEval || null,
+    deliverables,
+    phaseId: phaseId || null,
   });
 }

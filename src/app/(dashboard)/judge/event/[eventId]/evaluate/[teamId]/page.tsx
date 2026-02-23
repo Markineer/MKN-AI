@@ -15,6 +15,12 @@ import {
   MessageSquare,
   ThumbsUp,
   ThumbsDown,
+  ExternalLink,
+  GitBranch,
+  Presentation,
+  Globe,
+  FileText,
+  Link2,
 } from "lucide-react";
 
 interface Criterion {
@@ -47,6 +53,18 @@ interface ExistingEvaluation {
   weaknesses: string | null;
 }
 
+interface Deliverables {
+  projectTitle: string | null;
+  projectDescription: string | null;
+  repositoryUrl: string | null;
+  presentationUrl: string | null;
+  demoUrl: string | null;
+  miroBoard: string | null;
+  oneDriveUrl: string | null;
+  fileUrl: string | null;
+  submissionContent: string | null;
+}
+
 export default function EvaluateTeamPage() {
   const params = useParams();
   const router = useRouter();
@@ -59,6 +77,7 @@ export default function EvaluateTeamPage() {
   const [feedbackAr, setFeedbackAr] = useState("");
   const [strengths, setStrengths] = useState("");
   const [weaknesses, setWeaknesses] = useState("");
+  const [deliverables, setDeliverables] = useState<Deliverables | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -73,6 +92,7 @@ export default function EvaluateTeamPage() {
         const data = await res.json();
         setCriteria(data.criteria || []);
         setTeam(data.team || null);
+        if (data.deliverables) setDeliverables(data.deliverables);
 
         // Initialize scores
         const initial: Record<string, number> = {};
@@ -215,6 +235,73 @@ export default function EvaluateTeamPage() {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Team Deliverables */}
+      {deliverables && (deliverables.repositoryUrl || deliverables.presentationUrl || deliverables.demoUrl || deliverables.miroBoard || deliverables.oneDriveUrl || deliverables.fileUrl || deliverables.projectTitle) && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-6">
+          <h3 className="font-bold text-elm-navy mb-3 flex items-center gap-2 text-sm">
+            <FileText className="w-4 h-4 text-brand-500" />
+            تسليمات الفريق
+          </h3>
+          {deliverables.projectTitle && (
+            <div className="mb-3">
+              <p className="text-sm font-medium text-elm-navy">{deliverables.projectTitle}</p>
+              {deliverables.projectDescription && (
+                <p className="text-xs text-gray-500 mt-1 line-clamp-3">{deliverables.projectDescription}</p>
+              )}
+            </div>
+          )}
+          {deliverables.submissionContent && (
+            <div className="bg-gray-50 rounded-xl p-3 mb-3">
+              <p className="text-xs text-gray-600 whitespace-pre-wrap">{deliverables.submissionContent}</p>
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            {deliverables.repositoryUrl && (
+              <a href={deliverables.repositoryUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl text-xs hover:bg-brand-50 transition-colors group">
+                <GitBranch className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
+                <span className="text-gray-700 group-hover:text-brand-600 truncate">المستودع</span>
+                <ExternalLink className="w-3 h-3 text-gray-300 mr-auto" />
+              </a>
+            )}
+            {deliverables.presentationUrl && (
+              <a href={deliverables.presentationUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl text-xs hover:bg-brand-50 transition-colors group">
+                <Presentation className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
+                <span className="text-gray-700 group-hover:text-brand-600 truncate">العرض التقديمي</span>
+                <ExternalLink className="w-3 h-3 text-gray-300 mr-auto" />
+              </a>
+            )}
+            {deliverables.demoUrl && (
+              <a href={deliverables.demoUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl text-xs hover:bg-brand-50 transition-colors group">
+                <Globe className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
+                <span className="text-gray-700 group-hover:text-brand-600 truncate">النموذج التجريبي</span>
+                <ExternalLink className="w-3 h-3 text-gray-300 mr-auto" />
+              </a>
+            )}
+            {deliverables.miroBoard && (
+              <a href={deliverables.miroBoard} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl text-xs hover:bg-brand-50 transition-colors group">
+                <Link2 className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
+                <span className="text-gray-700 group-hover:text-brand-600 truncate">لوحة ميرو</span>
+                <ExternalLink className="w-3 h-3 text-gray-300 mr-auto" />
+              </a>
+            )}
+            {deliverables.oneDriveUrl && (
+              <a href={deliverables.oneDriveUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl text-xs hover:bg-brand-50 transition-colors group">
+                <Link2 className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
+                <span className="text-gray-700 group-hover:text-brand-600 truncate">ون درايف</span>
+                <ExternalLink className="w-3 h-3 text-gray-300 mr-auto" />
+              </a>
+            )}
+            {deliverables.fileUrl && (
+              <a href={deliverables.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl text-xs hover:bg-brand-50 transition-colors group">
+                <FileText className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
+                <span className="text-gray-700 group-hover:text-brand-600 truncate">ملف مرفق</span>
+                <ExternalLink className="w-3 h-3 text-gray-300 mr-auto" />
+              </a>
+            )}
           </div>
         </div>
       )}

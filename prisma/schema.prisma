@@ -511,6 +511,8 @@ model EventPhase {
   // ── Evaluation method ────────────
   evaluationMethod EvaluationType? @map("evaluation_method")
   advancementMode  AdvancementMode @default(OVERALL) @map("advancement_mode")
+  // ── Auto-filter rules ─────────
+  autoFilterRules  Json?    @map("auto_filter_rules")
   // ──────────────────────────────────
   isActive        Boolean  @default(true) @map("is_active")
   createdAt       DateTime @default(now()) @map("created_at")
