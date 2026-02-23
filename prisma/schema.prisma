@@ -462,6 +462,7 @@ model Event {
   challenges       Challenge[]
   attendanceBadges AttendanceBadge[]
   judgeAssignments JudgeAssignment[]
+  judgeInvitations JudgeInvitation[]
 
   @@map("events")
 }
@@ -485,6 +486,7 @@ model EventTrack {
   teams       Team[]
   challenges  Challenge[]
   judges      EventMember[]
+  judgeInvitations JudgeInvitation[]
 
   @@map("event_tracks")
 }
@@ -1280,6 +1282,27 @@ model JudgeAssignment {
 
   @@unique([phaseId, judgeId, teamId])
   @@map("judge_assignments")
+}
+
+// ============================================================================
+// 14b. JUDGE INVITATIONS - دعوات المحكمين
+// ============================================================================
+
+model JudgeInvitation {
+  id         String    @id @default(cuid())
+  eventId    String    @map("event_id")
+  email      String
+  trackId    String?   @map("track_id")
+  invitedBy  String?   @map("invited_by")
+  token      String    @unique
+  expiresAt  DateTime  @map("expires_at")
+  acceptedAt DateTime? @map("accepted_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  event Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  track EventTrack? @relation(fields: [trackId], references: [id])
+
+  @@map("judge_invitations")
 }
 
 // ============================================================================

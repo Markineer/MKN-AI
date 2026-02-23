@@ -35,8 +35,12 @@ export default function LoginPage() {
         const orgMemberships = (session?.user as any)?.orgMemberships || [];
         const isAdmin = roles.some((r: string) => ["super_admin", "platform_admin"].includes(r));
 
+        const isJudge = roles.includes("judge");
+
         if (isAdmin) {
           router.push("/admin");
+        } else if (isJudge) {
+          router.push("/judge");
         } else if (orgMemberships.length > 0) {
           router.push("/organization/events");
         } else {
