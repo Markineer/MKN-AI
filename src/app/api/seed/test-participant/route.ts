@@ -323,8 +323,24 @@ export async function POST() {
       );
 
       // ================================================================
-      // C. Hackathon 2 - Thaka'thon 2026
+      // C. Hackathon 2 - Thaka'thon 2026 (ACTIVE - covers today)
       // ================================================================
+      // Calculate dates relative to today so the demo always works
+      const today = new Date();
+      const todayStr = today.toISOString().split("T")[0];
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const twoDaysAgo = new Date(today);
+      twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+      const fourDaysAgo = new Date(today);
+      fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const dayAfterTomorrow = new Date(today);
+      dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 2);
+      const threeDaysFromNow = new Date(today);
+      threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
+
       // Try to find existing event
       let hackathon2 = await tx.event.findFirst({
         where: {
@@ -336,14 +352,31 @@ export async function POST() {
       });
 
       if (hackathon2) {
+        // Update dates to cover today
+        hackathon2 = await tx.event.update({
+          where: { id: hackathon2.id },
+          data: {
+            status: "IN_PROGRESS",
+            startDate: twoDaysAgo,
+            endDate: threeDaysFromNow,
+            hasPhases: true,
+            totalPhases: 5,
+          },
+        });
         summary.push(
-          `Found existing Thaka'thon event: "${hackathon2.title}" (${hackathon2.id})`
+          `Found & updated Thaka'thon event: "${hackathon2.title}" (${hackathon2.id})`
         );
       } else {
         const hackathon2Slug = "thakathon-2026";
         hackathon2 = await tx.event.upsert({
           where: { slug: hackathon2Slug },
-          update: {},
+          update: {
+            status: "IN_PROGRESS",
+            startDate: twoDaysAgo,
+            endDate: threeDaysFromNow,
+            hasPhases: true,
+            totalPhases: 5,
+          },
           create: {
             organizationId: org.id,
             title: "Thaka'thon 2026",
@@ -352,10 +385,12 @@ export async function POST() {
             type: "HACKATHON",
             category: "GENERAL",
             status: "IN_PROGRESS",
-            startDate: new Date("2026-02-20"),
-            endDate: new Date("2026-02-22"),
+            startDate: twoDaysAgo,
+            endDate: threeDaysFromNow,
             primaryColor: "#059669",
             registrationMode: "TEAM",
+            hasPhases: true,
+            totalPhases: 5,
           },
         });
         summary.push(
@@ -392,14 +427,10 @@ export async function POST() {
       });
 
       if (!team2) {
-        // Create a team for the user in Hackathon 2
         const team2Name = "Pioneers";
         team2 = await tx.team.findUnique({
           where: {
-            eventId_name: {
-              eventId: hackathon2.id,
-              name: team2Name,
-            },
+            eventId_name: { eventId: hackathon2.id, name: team2Name },
           },
         });
 
@@ -415,20 +446,316 @@ export async function POST() {
         }
 
         await tx.teamMember.upsert({
-          where: {
-            teamId_userId: { teamId: team2.id, userId: user.id },
-          },
+          where: { teamId_userId: { teamId: team2.id, userId: user.id } },
           update: { role: "LEADER" },
-          create: {
-            teamId: team2.id,
-            userId: user.id,
-            role: "LEADER",
+          create: { teamId: team2.id, userId: user.id, role: "LEADER" },
+        });
+      }
+
+      // Add other team members to Hackathon 2 team as well
+      for (const member of [ahmad, sara, khalid]) {
+        await tx.eventMember.upsert({
+          where: {
+            eventId_userId_role: {
+              eventId: hackathon2.id,
+              userId: member.id,
+              role: "PARTICIPANT",
+            },
           },
+          update: { status: "APPROVED" },
+          create: {
+            eventId: hackathon2.id,
+            userId: member.id,
+            role: "PARTICIPANT",
+            status: "APPROVED",
+          },
+        });
+        await tx.teamMember.upsert({
+          where: { teamId_userId: { teamId: team2.id, userId: member.id } },
+          update: { role: "MEMBER" },
+          create: { teamId: team2.id, userId: member.id, role: "MEMBER" },
         });
       }
       summary.push(
         `Team membership ensured for Thaka'thon: "${team2.nameAr || team2.name}" (${team2.id})`
       );
+
+      // ================================================================
+      // C2. Phases for Thaka'thon
+      // ================================================================
+      // Delete old phases first (idempotent)
+      await tx.eventScheduleItem.deleteMany({ where: { eventId: hackathon2.id } });
+      await tx.eventPhase.deleteMany({ where: { eventId: hackathon2.id } });
+
+      const phase1 = await tx.eventPhase.create({
+        data: {
+          eventId: hackathon2.id,
+          name: "Registration & Acceptance",
+          nameAr: "\u0627\u0644\u062a\u0633\u062c\u064a\u0644 \u0648\u0627\u0644\u0642\u0628\u0648\u0644",
+          phaseNumber: 1,
+          phaseType: "REGISTRATION",
+          status: "COMPLETED",
+          startDate: fourDaysAgo,
+          endDate: twoDaysAgo,
+        },
+      });
+
+      const phase2 = await tx.eventPhase.create({
+        data: {
+          eventId: hackathon2.id,
+          name: "Idea Review",
+          nameAr: "\u0645\u0631\u0627\u062c\u0639\u0629 \u0627\u0644\u0623\u0641\u0643\u0627\u0631",
+          description: "Submit your project idea with a clear description and initial plan.",
+          descriptionAr: "\u0641\u064a \u0647\u0630\u0647 \u0627\u0644\u0645\u0631\u062d\u0644\u0629\u060c \u0642\u062f\u0651\u0645 \u0641\u0643\u0631\u0629 \u0645\u0634\u0631\u0648\u0639\u0643 \u0645\u0639 \u0648\u0635\u0641 \u0648\u0627\u0636\u062d \u0648\u062e\u0637\u0629 \u0645\u0628\u062f\u0626\u064a\u0629. \u0627\u0633\u062a\u0639\u0646 \u0628\u0634\u0627\u062a IdeaFlow \u0644\u062a\u0637\u0648\u064a\u0631 \u0641\u0643\u0631\u062a\u0643.",
+          phaseNumber: 2,
+          phaseType: "IDEA_REVIEW",
+          status: "ACTIVE",
+          startDate: yesterday,
+          endDate: tomorrow,
+          deliverableConfig: {
+            fields: [
+              { type: "description", enabled: true, required: true, label: "\u0648\u0635\u0641 \u0627\u0644\u0641\u0643\u0631\u0629" },
+              { type: "presentation", enabled: true, required: false, label: "\u0639\u0631\u0636 \u062a\u0642\u062f\u064a\u0645\u064a \u0645\u0628\u062f\u0626\u064a" },
+            ],
+          },
+        },
+      });
+
+      const phase3 = await tx.eventPhase.create({
+        data: {
+          eventId: hackathon2.id,
+          name: "Development",
+          nameAr: "\u0627\u0644\u062a\u0637\u0648\u064a\u0631",
+          phaseNumber: 3,
+          phaseType: "DEVELOPMENT",
+          status: "UPCOMING",
+          startDate: tomorrow,
+          endDate: dayAfterTomorrow,
+          deliverableConfig: {
+            fields: [
+              { type: "description", enabled: true, required: true, label: "\u0648\u0635\u0641 \u0627\u0644\u0645\u0634\u0631\u0648\u0639" },
+              { type: "repository", enabled: true, required: true, label: "\u0631\u0627\u0628\u0637 \u0627\u0644\u0643\u0648\u062f (GitHub)" },
+              { type: "demo", enabled: true, required: false, label: "\u0631\u0627\u0628\u0637 \u0627\u0644\u062a\u062c\u0631\u0628\u0629 (Demo)" },
+            ],
+          },
+        },
+      });
+
+      const phase4 = await tx.eventPhase.create({
+        data: {
+          eventId: hackathon2.id,
+          name: "Presentation",
+          nameAr: "\u0627\u0644\u0639\u0631\u0636 \u0627\u0644\u062a\u0642\u062f\u064a\u0645\u064a",
+          phaseNumber: 4,
+          phaseType: "PRESENTATION",
+          status: "UPCOMING",
+          startDate: dayAfterTomorrow,
+          endDate: threeDaysFromNow,
+        },
+      });
+
+      const phase5 = await tx.eventPhase.create({
+        data: {
+          eventId: hackathon2.id,
+          name: "Final Judging",
+          nameAr: "\u0627\u0644\u062a\u062d\u0643\u064a\u0645 \u0627\u0644\u0646\u0647\u0627\u0626\u064a",
+          phaseNumber: 5,
+          phaseType: "JUDGING",
+          status: "UPCOMING",
+          startDate: threeDaysFromNow,
+          endDate: threeDaysFromNow,
+        },
+      });
+
+      summary.push(`5 phases created for Thaka'thon`);
+
+      // ================================================================
+      // C3. Schedule Items for Thaka'thon
+      // ================================================================
+      const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const tomorrowDate = new Date(todayDate);
+      tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+      const dayAfterTomorrowDate = new Date(todayDate);
+      dayAfterTomorrowDate.setDate(dayAfterTomorrowDate.getDate() + 2);
+      const threeDaysDate = new Date(todayDate);
+      threeDaysDate.setDate(threeDaysDate.getDate() + 3);
+
+      const scheduleItems = [
+        // ── Today ──
+        {
+          eventId: hackathon2.id,
+          phaseId: phase2.id,
+          title: "Opening Ceremony",
+          titleAr: "\u062d\u0641\u0644 \u0627\u0644\u0627\u0641\u062a\u062a\u0627\u062d \u0648\u0627\u0644\u062a\u0639\u0627\u0631\u0641",
+          description: "Welcome session and team introductions",
+          descriptionAr: "\u062c\u0644\u0633\u0629 \u062a\u0631\u062d\u064a\u0628\u064a\u0629 \u0648\u062a\u0639\u0627\u0631\u0641 \u0628\u064a\u0646 \u0627\u0644\u0641\u0631\u0642",
+          type: "CEREMONY" as const,
+          date: todayDate,
+          startTime: "09:00",
+          endTime: "09:30",
+          isOnline: false,
+          isInPerson: true,
+          location: "Main Hall",
+          locationAr: "\u0627\u0644\u0642\u0627\u0639\u0629 \u0627\u0644\u0631\u0626\u064a\u0633\u064a\u0629",
+          sortOrder: 1,
+        },
+        {
+          eventId: hackathon2.id,
+          phaseId: phase2.id,
+          title: "AI Design Thinking Workshop",
+          titleAr: "\u0648\u0631\u0634\u0629 \u0627\u0644\u062a\u0641\u0643\u064a\u0631 \u0627\u0644\u062a\u0635\u0645\u064a\u0645\u064a \u0628\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064a",
+          description: "Learn how to use AI tools in design thinking process",
+          descriptionAr: "\u062a\u0639\u0644\u0651\u0645 \u0643\u064a\u0641 \u062a\u0633\u062a\u062e\u062f\u0645 \u0623\u062f\u0648\u0627\u062a \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064a \u0641\u064a \u0639\u0645\u0644\u064a\u0629 \u0627\u0644\u062a\u0641\u0643\u064a\u0631 \u0627\u0644\u062a\u0635\u0645\u064a\u0645\u064a",
+          type: "WORKSHOP" as const,
+          date: todayDate,
+          startTime: "10:00",
+          endTime: "12:00",
+          isOnline: true,
+          isInPerson: false,
+          onlineLink: "https://zoom.us/j/example-workshop-1",
+          speaker: "Dr. Ahmed Alharbi",
+          speakerAr: "\u062f. \u0623\u062d\u0645\u062f \u0627\u0644\u062d\u0631\u0628\u064a",
+          sortOrder: 2,
+        },
+        {
+          eventId: hackathon2.id,
+          phaseId: phase2.id,
+          title: "Mentoring Session",
+          titleAr: "\u062c\u0644\u0633\u0629 \u0625\u0631\u0634\u0627\u062f \u0645\u0639 \u0627\u0644\u0645\u0648\u062c\u0647\u064a\u0646",
+          description: "One-on-one mentoring with industry experts",
+          descriptionAr: "\u062c\u0644\u0633\u0629 \u0625\u0631\u0634\u0627\u062f \u0641\u0631\u062f\u064a\u0629 \u0645\u0639 \u062e\u0628\u0631\u0627\u0621 \u0627\u0644\u0635\u0646\u0627\u0639\u0629",
+          type: "MENTORING" as const,
+          date: todayDate,
+          startTime: "14:00",
+          endTime: "15:30",
+          isOnline: true,
+          isInPerson: true,
+          onlineLink: "https://teams.microsoft.com/l/meetup-join/example",
+          location: "Mentoring Room B",
+          locationAr: "\u0642\u0627\u0639\u0629 \u0627\u0644\u0625\u0631\u0634\u0627\u062f B",
+          sortOrder: 3,
+        },
+        {
+          eventId: hackathon2.id,
+          phaseId: phase2.id,
+          title: "Initial Idea Submission Deadline",
+          titleAr: "\u0622\u062e\u0631 \u0645\u0648\u0639\u062f \u0644\u062a\u0633\u0644\u064a\u0645 \u0648\u0635\u0641 \u0627\u0644\u0641\u0643\u0631\u0629 \u0627\u0644\u0645\u0628\u062f\u0626\u064a",
+          type: "DEADLINE" as const,
+          date: todayDate,
+          startTime: "23:59",
+          isOnline: false,
+          isInPerson: false,
+          sortOrder: 4,
+        },
+        // ── Tomorrow ──
+        {
+          eventId: hackathon2.id,
+          phaseId: phase2.id,
+          title: "UI/UX Design Workshop",
+          titleAr: "\u0648\u0631\u0634\u0629 \u062a\u0635\u0645\u064a\u0645 \u0648\u0627\u062c\u0647\u0627\u062a \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645",
+          type: "WORKSHOP" as const,
+          date: tomorrowDate,
+          startTime: "10:00",
+          endTime: "12:00",
+          isOnline: false,
+          isInPerson: true,
+          location: "Design Lab",
+          locationAr: "\u0645\u0639\u0645\u0644 \u0627\u0644\u062a\u0635\u0645\u064a\u0645",
+          speaker: "Sara Almutairi",
+          speakerAr: "\u0633\u0627\u0631\u0629 \u0627\u0644\u0645\u0637\u064a\u0631\u064a",
+          sortOrder: 1,
+        },
+        {
+          eventId: hackathon2.id,
+          phaseId: phase2.id,
+          title: "Q&A with Judges Panel",
+          titleAr: "\u062c\u0644\u0633\u0629 \u0623\u0633\u0626\u0644\u0629 \u0648\u0623\u062c\u0648\u0628\u0629 \u0645\u0639 \u0644\u062c\u0646\u0629 \u0627\u0644\u062a\u062d\u0643\u064a\u0645",
+          type: "SESSION" as const,
+          date: tomorrowDate,
+          startTime: "14:00",
+          endTime: "15:00",
+          isOnline: true,
+          isInPerson: false,
+          onlineLink: "https://teams.microsoft.com/l/meetup-join/qa-session",
+          sortOrder: 2,
+        },
+        {
+          eventId: hackathon2.id,
+          phaseId: phase3.id,
+          title: "Prototyping Workshop",
+          titleAr: "\u0648\u0631\u0634\u0629 \u0628\u0646\u0627\u0621 \u0627\u0644\u0646\u0645\u0627\u0630\u062c \u0627\u0644\u0623\u0648\u0644\u064a\u0629",
+          type: "WORKSHOP" as const,
+          date: tomorrowDate,
+          startTime: "16:00",
+          endTime: "17:30",
+          isOnline: true,
+          isInPerson: false,
+          onlineLink: "https://zoom.us/j/example-prototyping",
+          speaker: "Khalid Alzahrani",
+          speakerAr: "\u062e\u0627\u0644\u062f \u0627\u0644\u0632\u0647\u0631\u0627\u0646\u064a",
+          sortOrder: 3,
+        },
+        // ── Day After Tomorrow ──
+        {
+          eventId: hackathon2.id,
+          phaseId: phase3.id,
+          title: "Effective Project Presentation Workshop",
+          titleAr: "\u0648\u0631\u0634\u0629 \u0639\u0631\u0636 \u0627\u0644\u0645\u0634\u0627\u0631\u064a\u0639 \u0628\u0641\u0639\u0627\u0644\u064a\u0629",
+          type: "WORKSHOP" as const,
+          date: dayAfterTomorrowDate,
+          startTime: "10:00",
+          endTime: "12:00",
+          isOnline: true,
+          isInPerson: false,
+          sortOrder: 1,
+        },
+        {
+          eventId: hackathon2.id,
+          phaseId: phase3.id,
+          title: "Final Project Submission Deadline",
+          titleAr: "\u0622\u062e\u0631 \u0645\u0648\u0639\u062f \u0644\u062a\u0633\u0644\u064a\u0645 \u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u0646\u0647\u0627\u0626\u064a",
+          type: "DEADLINE" as const,
+          date: dayAfterTomorrowDate,
+          startTime: "18:00",
+          isOnline: false,
+          isInPerson: false,
+          sortOrder: 2,
+        },
+        // ── Three Days From Now ──
+        {
+          eventId: hackathon2.id,
+          phaseId: phase4.id,
+          title: "Team Presentations",
+          titleAr: "\u0627\u0644\u0639\u0631\u0648\u0636 \u0627\u0644\u062a\u0642\u062f\u064a\u0645\u064a\u0629 \u0644\u0644\u0641\u0631\u0642",
+          type: "PRESENTATION" as const,
+          date: threeDaysDate,
+          startTime: "10:00",
+          endTime: "12:00",
+          isOnline: false,
+          isInPerson: true,
+          location: "Main Hall",
+          locationAr: "\u0627\u0644\u0642\u0627\u0639\u0629 \u0627\u0644\u0631\u0626\u064a\u0633\u064a\u0629",
+          sortOrder: 1,
+        },
+        {
+          eventId: hackathon2.id,
+          phaseId: phase5.id,
+          title: "Closing Ceremony & Results",
+          titleAr: "\u062d\u0641\u0644 \u0627\u0644\u062e\u062a\u0627\u0645 \u0648\u0625\u0639\u0644\u0627\u0646 \u0627\u0644\u0646\u062a\u0627\u0626\u062c",
+          type: "CEREMONY" as const,
+          date: threeDaysDate,
+          startTime: "14:00",
+          endTime: "16:00",
+          isOnline: false,
+          isInPerson: true,
+          location: "Main Hall",
+          locationAr: "\u0627\u0644\u0642\u0627\u0639\u0629 \u0627\u0644\u0631\u0626\u064a\u0633\u064a\u0629",
+          sortOrder: 2,
+        },
+      ];
+
+      await tx.eventScheduleItem.createMany({ data: scheduleItems });
+      summary.push(`${scheduleItems.length} schedule items created for Thaka'thon`);
 
       // ================================================================
       // D. Challenge - Smart Contract Analysis Challenge (COMPLETED)
