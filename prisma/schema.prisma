@@ -34,6 +34,16 @@ model User {
   dateOfBirth       DateTime? @map("date_of_birth")
   city              String?
   country           String?   @default("SA")
+  // ── Education ──────────────────────
+  university        String?
+  universityAr      String?   @map("university_ar")
+  college           String?
+  collegeAr         String?   @map("college_ar")
+  major             String?
+  majorAr           String?   @map("major_ar")
+  specialization    String?
+  specializationAr  String?   @map("specialization_ar")
+  // ───────────────────────────────────
   language          String    @default("ar")
   timezone          String    @default("Asia/Riyadh")
   isActive          Boolean   @default(true) @map("is_active")

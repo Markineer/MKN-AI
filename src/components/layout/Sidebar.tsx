@@ -22,6 +22,7 @@ import {
   Bot,
   ClipboardCheck,
   Gavel,
+  UserCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -71,6 +72,7 @@ const adminNavigation = [
   {
     title: "أخرى",
     items: [
+      { nameAr: "الملف الشخصي", href: "/profile", icon: UserCircle },
       { nameAr: "بيانات الباحثين", href: "/researcher/datasets", icon: FlaskConical },
       { nameAr: "الإشعارات", href: "/admin/notifications", icon: Bell },
       { nameAr: "الإعدادات", href: "/admin/settings", icon: Settings },
@@ -83,6 +85,7 @@ const judgeNavigation = [
     title: "لوحة المحكم",
     items: [
       { nameAr: "الفعاليات المعينة", href: "/judge", icon: ClipboardCheck },
+      { nameAr: "الملف الشخصي", href: "/profile", icon: UserCircle },
     ],
   },
 ];
@@ -92,6 +95,7 @@ const teamNavigation = [
     title: "لوحة الفريق",
     items: [
       { nameAr: "فرقي وتسليماتي", href: "/team", icon: FileText },
+      { nameAr: "الملف الشخصي", href: "/profile", icon: UserCircle },
     ],
   },
 ];
