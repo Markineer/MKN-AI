@@ -124,8 +124,8 @@ export default function Sidebar({ userRoles, userNameAr }: SidebarProps) {
     : showJudgeNav
     ? judgeNavigation
     : teamNavigation;
-  const homeHref = showTeamNav ? "/team" : isAdmin && !showJudgeNav ? "/admin" : "/judge";
-  const roleLabel = showTeamNav ? "مشارك" : isAdmin ? "مدير أعلى" : "محكّم";
+  const homeHref = showTeamNav ? "/team" : isAdmin && !showJudgeNav ? "/admin" : showJudgeNav ? "/judge" : "/profile";
+  const roleLabel = showTeamNav ? "مشارك" : isAdmin && !showJudgeNav ? "مدير أعلى" : showJudgeNav ? "محكّم" : "مشارك";
 
   return (
     <aside className="w-72 h-screen bg-white border-l border-gray-100/80 flex flex-col fixed right-0 top-0 z-40">
