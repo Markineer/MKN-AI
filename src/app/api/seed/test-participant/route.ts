@@ -503,6 +503,112 @@ export async function POST() {
         `Certificate created: "${cert2.title}" (${cert2.certificateNo})`
       );
 
+      // ================================================================
+      // E. Seed Notifications
+      // ================================================================
+      // Delete old notifications for this user first (idempotent)
+      await tx.notification.deleteMany({ where: { userId: user.id } });
+
+      const notifications = [
+        // Read notifications (old events)
+        {
+          userId: user.id,
+          type: "EVENT" as const,
+          title: "تم قبول طلب انضمامك",
+          titleAr: "تم قبول طلب انضمامك",
+          message: `تم قبولك في ${hackathon1.titleAr}. نتمنى لك تجربة مميزة!`,
+          messageAr: `تم قبولك في ${hackathon1.titleAr}. نتمنى لك تجربة مميزة!`,
+          data: { eventId: hackathon1.id, action: "accepted" },
+          isRead: true,
+          readAt: new Date("2025-05-16"),
+          createdAt: new Date("2025-05-15"),
+        },
+        {
+          userId: user.id,
+          type: "TEAM" as const,
+          title: "تمت إضافتك لفريق",
+          titleAr: "تمت إضافتك لفريق",
+          message: `تمت إضافتك كقائدة لفريق "${team1.nameAr}" في ${hackathon1.titleAr}`,
+          messageAr: `تمت إضافتك كقائدة لفريق "${team1.nameAr}" في ${hackathon1.titleAr}`,
+          data: { teamId: team1.id, eventId: hackathon1.id },
+          isRead: true,
+          readAt: new Date("2025-05-17"),
+          createdAt: new Date("2025-05-16"),
+        },
+        {
+          userId: user.id,
+          type: "EVALUATION" as const,
+          title: "تم نشر نتائج التقييم",
+          titleAr: "تم نشر نتائج التقييم",
+          message: `تم نشر نتائج التقييم النهائي في ${hackathon1.titleAr}. حصل فريقك على 87.5 نقطة`,
+          messageAr: `تم نشر نتائج التقييم النهائي في ${hackathon1.titleAr}. حصل فريقك على 87.5 نقطة`,
+          data: { eventId: hackathon1.id, score: 87.5 },
+          isRead: true,
+          readAt: new Date("2025-06-18"),
+          createdAt: new Date("2025-06-17"),
+        },
+        {
+          userId: user.id,
+          type: "CERTIFICATE" as const,
+          title: "تم إصدار شهادة",
+          titleAr: "تم إصدار شهادة",
+          message: `تهانينا! تم إصدار شهادة المركز الثاني لك في ${hackathon1.titleAr}`,
+          messageAr: `تهانينا! تم إصدار شهادة المركز الثاني لك في ${hackathon1.titleAr}`,
+          data: { eventId: hackathon1.id, certificateNo: cert1.certificateNo },
+          isRead: true,
+          readAt: new Date("2025-06-19"),
+          createdAt: new Date("2025-06-18"),
+        },
+        // Unread notifications (current events)
+        {
+          userId: user.id,
+          type: "EVENT" as const,
+          title: "تم قبول طلب انضمامك",
+          titleAr: "تم قبول طلب انضمامك",
+          message: `تم قبولك في ${hackathon2.titleAr}. استعدي للمنافسة!`,
+          messageAr: `تم قبولك في ${hackathon2.titleAr}. استعدي للمنافسة!`,
+          data: { eventId: hackathon2.id, action: "accepted" },
+          isRead: false,
+          createdAt: new Date("2026-02-18"),
+        },
+        {
+          userId: user.id,
+          type: "TEAM" as const,
+          title: "تمت إضافتك لفريق",
+          titleAr: "تمت إضافتك لفريق",
+          message: `تمت إضافتك كقائدة لفريق "${team2.nameAr || team2.name}" في ${hackathon2.titleAr}`,
+          messageAr: `تمت إضافتك كقائدة لفريق "${team2.nameAr || team2.name}" في ${hackathon2.titleAr}`,
+          data: { teamId: team2.id, eventId: hackathon2.id },
+          isRead: false,
+          createdAt: new Date("2026-02-19"),
+        },
+        {
+          userId: user.id,
+          type: "ANNOUNCEMENT" as const,
+          title: "إعلان: ورشة عمل",
+          titleAr: "إعلان: ورشة عمل",
+          message: "ورشة عمل الذكاء الاصطناعي التطبيقي - يوم الأربعاء الساعة 4 عصراً",
+          messageAr: "ورشة عمل الذكاء الاصطناعي التطبيقي - يوم الأربعاء الساعة 4 عصراً",
+          data: { eventId: hackathon2.id, workshopTitle: "الذكاء الاصطناعي التطبيقي" },
+          isRead: false,
+          createdAt: new Date("2026-02-22"),
+        },
+        {
+          userId: user.id,
+          type: "REMINDER" as const,
+          title: "تذكير: موعد التسليم",
+          titleAr: "تذكير: موعد التسليم",
+          message: "باقي يومين على تسليم مرحلة التطوير. تأكدي من رفع جميع المتطلبات",
+          messageAr: "باقي يومين على تسليم مرحلة التطوير. تأكدي من رفع جميع المتطلبات",
+          data: { eventId: hackathon2.id, phaseType: "DEVELOPMENT" },
+          isRead: false,
+          createdAt: new Date("2026-02-23"),
+        },
+      ];
+
+      await tx.notification.createMany({ data: notifications });
+      summary.push(`${notifications.length} notifications created (4 read + 4 unread)`);
+
       return {
         userId: user.id,
         email: user.email,
@@ -513,6 +619,7 @@ export async function POST() {
         team2Id: team2.id,
         certificate1No: cert1.certificateNo,
         certificate2No: cert2.certificateNo,
+        notificationsCreated: notifications.length,
         summary,
       };
     });

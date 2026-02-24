@@ -92,9 +92,11 @@ const judgeNavigation = [
 
 const teamNavigation = [
   {
-    title: "لوحة الفريق",
+    title: "لوحة المشارك",
     items: [
+      { nameAr: "فعالياتي", href: "/my-events", icon: Calendar },
       { nameAr: "فرقي وتسليماتي", href: "/team", icon: FileText },
+      { nameAr: "التنبيهات", href: "/notifications", icon: Bell },
       { nameAr: "الملف الشخصي", href: "/profile", icon: UserCircle },
     ],
   },
@@ -111,12 +113,13 @@ export default function Sidebar({ userRoles, userNameAr }: SidebarProps) {
   const toggle = (title: string) =>
     setCollapsed((prev) => ({ ...prev, [title]: !prev[title] }));
 
-  // Also detect team member by checking if user is on /team path
+  // Also detect participant by checking if user is on participant paths
   const isOnTeamPath = pathname.startsWith("/team");
+  const isOnParticipantPath = isOnTeamPath || pathname.startsWith("/my-events") || pathname.startsWith("/notifications") || pathname.startsWith("/profile");
 
   // Select navigation based on role and current path
   const showJudgeNav = isJudge || isOnJudgePath;
-  const showTeamNav = isOnTeamPath;
+  const showTeamNav = !isAdmin && !showJudgeNav ? isOnParticipantPath || true : isOnParticipantPath;
   const navigation = showTeamNav
     ? teamNavigation
     : isAdmin && !showJudgeNav
