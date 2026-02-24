@@ -44,7 +44,7 @@ export default function LoginPage() {
         } else if (orgMemberships.length > 0) {
           router.push("/organization/events");
         } else {
-          router.push("/admin");
+          router.push("/profile");
         }
       }
     } catch {
