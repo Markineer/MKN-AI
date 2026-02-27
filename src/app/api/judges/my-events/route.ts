@@ -40,22 +40,9 @@ export async function GET() {
         },
       });
 
-      // If no assignments exist, count all teams in the judge's track
-      let totalAssignments = assignments.length;
-      let completedAssignments = assignments.filter(a => a.status === "COMPLETED").length;
-
-      if (assignments.length === 0) {
-        // Fallback: count teams in the judge's track
-        const teamCount = await prisma.team.count({
-          where: {
-            eventId: m.eventId,
-            status: { in: ["ACTIVE", "FORMING", "SUBMITTED"] },
-            ...(m.trackId ? { trackId: m.trackId } : {}),
-          },
-        });
-        totalAssignments = teamCount;
-        completedAssignments = evaluations;
-      }
+      // Only show formally assigned teams — no fallback
+      const totalAssignments = assignments.length;
+      const completedAssignments = assignments.filter(a => a.status === "COMPLETED").length;
 
       return {
         eventId: m.eventId,

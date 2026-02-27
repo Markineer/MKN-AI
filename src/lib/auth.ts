@@ -94,7 +94,7 @@ export const authOptions: NextAuthOptions = {
             }
           }
 
-          // Also detect judge role from EventMember records
+          // Auto-detect judge role from EventMember records
           if (!roles.includes("judge")) {
             const judgeEventMember = await prisma.eventMember.findFirst({
               where: { userId: user.id, role: "JUDGE" },
@@ -109,6 +109,16 @@ export const authOptions: NextAuthOptions = {
             where: { userId: user.id },
             select: { organizationId: true, role: true },
           });
+
+          // Auto-detect organization admin role
+          if (!roles.includes("organization_admin")) {
+            const isOrgAdmin = orgMemberships.some(
+              (m) => m.role === "OWNER" || m.role === "ADMIN"
+            );
+            if (isOrgAdmin) {
+              roles.push("organization_admin");
+            }
+          }
 
           return {
             id: user.id,

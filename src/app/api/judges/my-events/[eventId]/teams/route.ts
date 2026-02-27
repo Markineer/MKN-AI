@@ -35,21 +35,16 @@ export async function GET(
     select: { teamId: true, status: true },
   });
 
-  let teamIds: string[];
+  // Only show formally assigned teams — no fallback to all teams
+  const teamIds = assignments.map(a => a.teamId);
 
-  if (assignments.length > 0) {
-    teamIds = assignments.map(a => a.teamId);
-  } else {
-    // No formal assignments — show all teams in judge's track (or all teams)
-    const teams = await prisma.team.findMany({
-      where: {
-        eventId,
-        status: { in: ["ACTIVE", "FORMING", "SUBMITTED"] },
-        ...(judgeMember.trackId ? { trackId: judgeMember.trackId } : {}),
-      },
-      select: { id: true },
+  if (teamIds.length === 0) {
+    return NextResponse.json({
+      teams: [],
+      eventName: event?.title || "",
+      eventNameAr: event?.titleAr || "",
+      message: "لم يتم تعيين فرق لك بعد. سيتم إشعارك عند التعيين.",
     });
-    teamIds = teams.map(t => t.id);
   }
 
   // Fetch full team data

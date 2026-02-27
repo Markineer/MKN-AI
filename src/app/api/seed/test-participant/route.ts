@@ -138,6 +138,49 @@ export async function POST() {
       summary.push(`Organization upserted: ${org.slug} (${org.id})`);
 
       // ================================================================
+      // A2. Create Organization Admin - Noura Alqahtani
+      // ================================================================
+      const orgAdmin = await tx.user.upsert({
+        where: { email: "org-admin@uqu.edu.sa" },
+        update: {
+          password: hashedPassword,
+          firstName: "Noura",
+          firstNameAr: "نورة",
+          lastName: "Alqahtani",
+          lastNameAr: "القحطاني",
+        },
+        create: {
+          email: "org-admin@uqu.edu.sa",
+          password: hashedPassword,
+          firstName: "Noura",
+          firstNameAr: "نورة",
+          lastName: "Alqahtani",
+          lastNameAr: "القحطاني",
+          university: "Umm Al-Qura University",
+          universityAr: "جامعة أم القرى",
+          gender: "FEMALE",
+          isVerified: true,
+        },
+      });
+
+      // Make her an ADMIN in the organization
+      await tx.organizationMember.upsert({
+        where: {
+          organizationId_userId: {
+            organizationId: org.id,
+            userId: orgAdmin.id,
+          },
+        },
+        update: { role: "ADMIN" },
+        create: {
+          organizationId: org.id,
+          userId: orgAdmin.id,
+          role: "ADMIN",
+        },
+      });
+      summary.push(`Org admin upserted: ${orgAdmin.email} (${orgAdmin.id}) → ADMIN in ${org.slug}`);
+
+      // ================================================================
       // B. Hackathon 1 - Digital Innovation Hackathon 2025 (COMPLETED)
       // ================================================================
       const hackathon1Slug = "digital-innovation-hackathon-2025";

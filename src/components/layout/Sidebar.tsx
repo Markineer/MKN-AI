@@ -23,6 +23,7 @@ import {
   ClipboardCheck,
   Gavel,
   UserCircle,
+  PlusCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -32,7 +33,8 @@ interface SidebarProps {
   userNameAr: string;
 }
 
-// Navigation items with role-based access
+// ─── Navigation menus per role ───────────────────────────────────
+
 const adminNavigation = [
   {
     title: "الرئيسية",
@@ -80,6 +82,22 @@ const adminNavigation = [
   },
 ];
 
+const orgAdminNavigation = [
+  {
+    title: "إدارة الفعاليات",
+    items: [
+      { nameAr: "الفعاليات", href: "/organization/events", icon: Calendar },
+      { nameAr: "إنشاء فعالية", href: "/organization/events/create", icon: PlusCircle },
+    ],
+  },
+  {
+    title: "أخرى",
+    items: [
+      { nameAr: "الملف الشخصي", href: "/profile", icon: UserCircle },
+    ],
+  },
+];
+
 const judgeNavigation = [
   {
     title: "لوحة المحكم",
@@ -102,33 +120,42 @@ const teamNavigation = [
   },
 ];
 
+// ─── Sidebar Component ──────────────────────────────────────────
+
 export default function Sidebar({ userRoles, userNameAr }: SidebarProps) {
   const pathname = usePathname();
-  const isAdmin = userRoles.includes("super_admin") || userRoles.includes("platform_admin");
-  const isJudge = userRoles.includes("judge");
-  // Also detect judge by checking if user is on /judge path (for users without explicit role)
-  const isOnJudgePath = pathname.startsWith("/judge");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const toggle = (title: string) =>
     setCollapsed((prev) => ({ ...prev, [title]: !prev[title] }));
 
-  // Also detect participant by checking if user is on participant paths
-  const isOnTeamPath = pathname.startsWith("/team");
-  const isOnParticipantPath = isOnTeamPath || pathname.startsWith("/my-events") || pathname.startsWith("/notifications") || pathname.startsWith("/profile");
+  // Determine role — strict priority: admin > org admin > judge > participant
+  const isAdmin = userRoles.includes("super_admin") || userRoles.includes("platform_admin");
+  const isOrgAdmin = userRoles.includes("organization_admin");
+  const isJudge = userRoles.includes("judge");
 
-  // Select navigation based on role and current path
-  const showJudgeNav = isJudge || isOnJudgePath;
-  const showTeamNav = !isAdmin && !showJudgeNav ? isOnParticipantPath || true : isOnParticipantPath;
-  const navigation = showTeamNav
-    ? teamNavigation
-    : isAdmin && !showJudgeNav
-    ? adminNavigation
-    : showJudgeNav
-    ? judgeNavigation
-    : teamNavigation;
-  const homeHref = showTeamNav ? "/team" : isAdmin && !showJudgeNav ? "/admin" : showJudgeNav ? "/judge" : "/profile";
-  const roleLabel = showTeamNav ? "مشارك" : isAdmin && !showJudgeNav ? "مدير أعلى" : showJudgeNav ? "محكّم" : "مشارك";
+  // Select navigation and labels based on role (strict, no path-based switching)
+  let navigation;
+  let homeHref: string;
+  let roleLabel: string;
+
+  if (isAdmin) {
+    navigation = adminNavigation;
+    homeHref = "/admin";
+    roleLabel = "مدير أعلى";
+  } else if (isOrgAdmin) {
+    navigation = orgAdminNavigation;
+    homeHref = "/organization/events";
+    roleLabel = "مدير المؤسسة";
+  } else if (isJudge) {
+    navigation = judgeNavigation;
+    homeHref = "/judge";
+    roleLabel = "محكّم";
+  } else {
+    navigation = teamNavigation;
+    homeHref = "/team";
+    roleLabel = "مشارك";
+  }
 
   return (
     <aside className="w-72 h-screen bg-white border-l border-gray-100/80 flex flex-col fixed right-0 top-0 z-40">
