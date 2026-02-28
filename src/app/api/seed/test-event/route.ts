@@ -54,7 +54,44 @@ export async function POST() {
         },
       });
 
-      summary.push("Users verified/created");
+      summary.push("Base users verified/created");
+
+      // ================================================================
+      // 1b. Mishal Alzamel - multi-role test user
+      // ================================================================
+      const mishalPassword = await bcrypt.hash("Test@123", 12);
+      const mishal = await tx.user.upsert({
+        where: { email: "mishal@test.sa" },
+        update: {
+          password: mishalPassword,
+          firstName: "Mishal",
+          firstNameAr: "مشعل",
+          lastName: "Alzamel",
+          lastNameAr: "الزامل",
+        },
+        create: {
+          email: "mishal@test.sa",
+          password: mishalPassword,
+          firstName: "Mishal",
+          firstNameAr: "مشعل",
+          lastName: "Alzamel",
+          lastNameAr: "الزامل",
+          university: "King Saud University",
+          universityAr: "جامعة الملك سعود",
+          college: "College of Computer Science",
+          collegeAr: "كلية علوم الحاسب",
+          major: "Computer Science",
+          majorAr: "علوم الحاسب",
+          city: "الرياض",
+          gender: "MALE",
+          bio: "مطور ومحكم ومدير مؤسسة - حساب اختباري متعدد الأدوار",
+          bioAr: "مطور ومحكم ومدير مؤسسة - حساب اختباري متعدد الأدوار",
+          isActive: true,
+          isVerified: true,
+          language: "ar",
+        },
+      });
+      summary.push(`Mishal Alzamel upserted: ${mishal.email} (${mishal.id})`);
 
       // ================================================================
       // 2. Organization
@@ -69,6 +106,14 @@ export async function POST() {
           isActive: true, isVerified: true,
         },
       });
+
+      // Mishal as ADMIN in organization
+      await tx.organizationMember.upsert({
+        where: { organizationId_userId: { organizationId: org.id, userId: mishal.id } },
+        update: { role: "ADMIN" },
+        create: { organizationId: org.id, userId: mishal.id, role: "ADMIN" },
+      });
+      summary.push(`Mishal → ADMIN in ${org.slug} (org admin role)`);
 
       // ================================================================
       // 3. Test Event - ذكاءثون تجريبي
@@ -308,7 +353,20 @@ export async function POST() {
       summary.push(`7 event members created (1 organizer, 1 judge, 1 mentor, 4 participants)`);
 
       // ================================================================
-      // 9. Teams (3)
+      // 8b. Mishal Alzamel — multiple roles in the event
+      // ================================================================
+      // As JUDGE
+      await tx.eventMember.create({
+        data: { eventId: event.id, userId: mishal.id, role: "JUDGE", status: "APPROVED", approvedAt: new Date() },
+      });
+      // As PARTICIPANT (separate membership)
+      await tx.eventMember.create({
+        data: { eventId: event.id, userId: mishal.id, role: "PARTICIPANT", status: "APPROVED", approvedAt: new Date() },
+      });
+      summary.push(`Mishal added as JUDGE + PARTICIPANT in test event`);
+
+      // ================================================================
+      // 9. Teams (3 + Mishal's team)
       // ================================================================
       const hajjTrack = tracks["Hajj & Umrah"];
       const eduTrack = tracks["Education"];
@@ -351,45 +409,68 @@ export async function POST() {
       await tx.teamMember.create({ data: { teamId: team3.id, userId: ahmad.id, role: "MEMBER" } });
       await tx.teamMember.create({ data: { teamId: team3.id, userId: sara.id, role: "MEMBER" } });
 
-      summary.push(`3 teams created: الرواد (${hajjTrack.nameAr}), المبتكرات (${eduTrack.nameAr}), التقنيات القانونية (${lawTrack.nameAr})`);
+      // Team 4: فريق مشعل — Tourism track — led by Mishal (as participant)
+      const tourismTrack = tracks["Tourism & Culture"];
+      const team4 = await tx.team.create({
+        data: {
+          eventId: event.id, trackId: tourismTrack.id,
+          name: "MishalTeam", nameAr: "فريق الإبداع", status: "ACTIVE",
+          projectTitle: "Smart Tourism Guide", projectTitleAr: "المرشد السياحي الذكي",
+        },
+      });
+      await tx.teamMember.create({ data: { teamId: team4.id, userId: mishal.id, role: "LEADER" } });
+      await tx.teamMember.create({ data: { teamId: team4.id, userId: ahmad.id, role: "MEMBER" } });
+
+      summary.push(`4 teams created: الرواد, المبتكرات, التقنيات القانونية, فريق الإبداع (مشعل)`);
 
       // ================================================================
-      // 10. Judge Assignments (2 teams assigned to judge)
+      // 10. Judge Assignments
       // ================================================================
+      // Original judge (judge@elm.sa) → 2 teams
       const judgeMember = await tx.eventMember.findFirst({
         where: { eventId: event.id, userId: judgeUser.id, role: "JUDGE" },
       });
 
       if (judgeMember) {
         await tx.judgeAssignment.create({
-          data: {
-            eventId: event.id,
-            phaseId: phase2.id,
-            judgeId: judgeMember.id,
-            teamId: team1.id,
-            trackId: hajjTrack.id,
-            status: "PENDING",
-          },
+          data: { eventId: event.id, phaseId: phase2.id, judgeId: judgeMember.id, teamId: team1.id, trackId: hajjTrack.id, status: "PENDING" },
         });
         await tx.judgeAssignment.create({
-          data: {
-            eventId: event.id,
-            phaseId: phase2.id,
-            judgeId: judgeMember.id,
-            teamId: team2.id,
-            trackId: eduTrack.id,
-            status: "PENDING",
-          },
+          data: { eventId: event.id, phaseId: phase2.id, judgeId: judgeMember.id, teamId: team2.id, trackId: eduTrack.id, status: "PENDING" },
         });
-        summary.push(`Judge assigned to 2 teams: الرواد + المبتكرات`);
+        summary.push(`Judge (judge@elm.sa) assigned to 2 teams: الرواد + المبتكرات`);
       }
+
+      // Mishal as judge → team3 (law track) — different track from his own team
+      const mishalJudgeMember = await tx.eventMember.findFirst({
+        where: { eventId: event.id, userId: mishal.id, role: "JUDGE" },
+      });
+
+      if (mishalJudgeMember) {
+        await tx.judgeAssignment.create({
+          data: { eventId: event.id, phaseId: phase2.id, judgeId: mishalJudgeMember.id, teamId: team3.id, trackId: lawTrack.id, status: "PENDING" },
+        });
+        await tx.judgeAssignment.create({
+          data: { eventId: event.id, phaseId: phase2.id, judgeId: mishalJudgeMember.id, teamId: team1.id, trackId: hajjTrack.id, status: "PENDING" },
+        });
+        summary.push(`Mishal (judge) assigned to 2 teams: التقنيات القانونية + الرواد`);
+      }
+
+      // ================================================================
+      // 11. Summary of Mishal's roles
+      // ================================================================
+      summary.push(`--- مشعل الزامل (mishal@test.sa / Test@123) ---`);
+      summary.push(`  مدير مؤسسة: ADMIN في ${org.slug} → يشوف /organization/events`);
+      summary.push(`  محكم: JUDGE في ذكاءثون تجريبي → يشوف /judge + فريقين معينين`);
+      summary.push(`  مشارك: PARTICIPANT + قائد فريق "الإبداع" → يشوف /team + /my-events`);
 
       return {
         eventId: event.id,
         eventSlug: event.slug,
         tracks: Object.keys(tracks).length,
-        teams: 3,
-        judgeAssignments: 2,
+        teams: 4,
+        judgeAssignments: 4,
+        mishalId: mishal.id,
         summary,
       };
     });
