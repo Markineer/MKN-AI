@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
       permissions: {
         include: {
           permission: {
-            select: { code: true, name: true, nameAr: true, module: true, action: true },
+            select: { id: true, code: true, name: true, nameAr: true, module: true, action: true },
           },
         },
       },
