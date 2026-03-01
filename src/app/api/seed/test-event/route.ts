@@ -131,6 +131,15 @@ export async function POST() {
           update: { role: "ADMIN" },
           create: { organizationId: org.id, userId: mishalAdmin.id, role: "ADMIN" },
         });
+
+        // Clean up old org membership for mishal@test.sa (participant only, no org admin)
+        await tx.organizationMember.deleteMany({
+          where: { organizationId: org.id, userId: mishalParticipant.id },
+        });
+        // Clean up old org membership for mishal-judge (judge only, no org admin)
+        await tx.organizationMember.deleteMany({
+          where: { organizationId: org.id, userId: mishalJudge.id },
+        });
       }
 
       summary.push(`Mishal: mishal-admin@test.sa (org admin), mishal-judge@test.sa (judge), mishal@test.sa (participant)`);
