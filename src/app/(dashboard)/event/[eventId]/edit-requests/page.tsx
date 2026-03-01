@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   Loader2, ChevronLeft, ChevronDown, ChevronUp,
   CheckCircle2, XCircle, Clock, FileEdit, Users, AlertCircle, Send,
+  Plus, Minus,
 } from "lucide-react";
 
 interface EditRequest {
@@ -99,9 +100,6 @@ export default function EditRequestsPage() {
     if (original.nameAr !== proposed.nameAr) {
       changes.push({ label: "اسم الفريق", from: original.nameAr || "—", to: proposed.nameAr || "—" });
     }
-    if (original.trackId !== proposed.trackId) {
-      changes.push({ label: "المسار", from: original.trackId || "—", to: proposed.trackId || "—" });
-    }
     return changes;
   }
 
@@ -112,7 +110,7 @@ export default function EditRequestsPage() {
 
     for (const pm of proposed.members) {
       const om = original.members.find((m: any) => m.userId === pm.userId);
-      if (!om) continue;
+      if (!om) continue; // new members handled separately
 
       const fieldChanges: { label: string; from: string; to: string }[] = [];
       for (const [key, label] of Object.entries(MEMBER_FIELD_LABELS)) {
@@ -129,10 +127,26 @@ export default function EditRequestsPage() {
     return changes;
   }
 
+  // Find added members (in proposed but not in original)
+  function getAddedMembers(original: any, proposed: any) {
+    if (!original?.members || !proposed?.members) return [];
+    const originalIds = new Set(original.members.map((m: any) => m.userId));
+    return proposed.members.filter((m: any) => !originalIds.has(m.userId) || m.isNew);
+  }
+
+  // Find removed members (in original but not in proposed)
+  function getRemovedMembers(original: any, proposed: any) {
+    if (!original?.members || !proposed?.members) return [];
+    const proposedIds = new Set(proposed.members.map((m: any) => m.userId));
+    return original.members.filter((m: any) => !proposedIds.has(m.userId));
+  }
+
   function getTotalChangeCount(original: any, proposed: any) {
     const teamChanges = getTeamChanges(original, proposed).length;
     const memberChanges = getMemberChanges(original, proposed).reduce((sum, m) => sum + m.fields.length, 0);
-    return teamChanges + memberChanges;
+    const added = getAddedMembers(original, proposed).length;
+    const removed = getRemovedMembers(original, proposed).length;
+    return teamChanges + memberChanges + added + removed;
   }
 
   if (loading) {
@@ -184,6 +198,8 @@ export default function EditRequestsPage() {
             const isExpanded = expandedId === req.id;
             const teamChanges = getTeamChanges(req.originalData, req.proposedData);
             const memberChanges = getMemberChanges(req.originalData, req.proposedData);
+            const addedMembers = getAddedMembers(req.originalData, req.proposedData);
+            const removedMembers = getRemovedMembers(req.originalData, req.proposedData);
             const totalChanges = getTotalChangeCount(req.originalData, req.proposedData);
 
             return (
@@ -264,6 +280,52 @@ export default function EditRequestsPage() {
                                         </div>
                                       </div>
                                     ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Added members */}
+                        {addedMembers.length > 0 && (
+                          <div className="mb-4">
+                            <h4 className="text-xs font-bold text-gray-500 mb-3 flex items-center gap-1.5">
+                              <Plus className="w-3.5 h-3.5 text-emerald-500" />
+                              أعضاء جدد ({addedMembers.length})
+                            </h4>
+                            <div className="space-y-2">
+                              {addedMembers.map((m: any, i: number) => (
+                                <div key={i} className="bg-emerald-50 rounded-xl p-3 border border-emerald-200">
+                                  <p className="text-xs font-bold text-emerald-700 mb-1">{m.fullName || m.personalEmail || "عضو جديد"}</p>
+                                  <div className="grid grid-cols-2 gap-1 text-[11px] text-emerald-600">
+                                    {m.personalEmail && <span>البريد: {m.personalEmail}</span>}
+                                    {m.universityEmail && <span>الجامعي: {m.universityEmail}</span>}
+                                    {m.studentId && <span>الرقم: {m.studentId}</span>}
+                                    {m.college && <span>الكلية: {m.college}</span>}
+                                    {m.major && <span>التخصص: {m.major}</span>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Removed members */}
+                        {removedMembers.length > 0 && (
+                          <div className="mb-4">
+                            <h4 className="text-xs font-bold text-gray-500 mb-3 flex items-center gap-1.5">
+                              <Minus className="w-3.5 h-3.5 text-red-500" />
+                              أعضاء محذوفون ({removedMembers.length})
+                            </h4>
+                            <div className="space-y-2">
+                              {removedMembers.map((m: any, i: number) => (
+                                <div key={i} className="bg-red-50 rounded-xl p-3 border border-red-200">
+                                  <p className="text-xs font-bold text-red-700 mb-1">{m.fullName || m.personalEmail}</p>
+                                  <div className="grid grid-cols-2 gap-1 text-[11px] text-red-500">
+                                    {m.personalEmail && <span>البريد: {m.personalEmail}</span>}
+                                    {m.college && <span>الكلية: {m.college}</span>}
+                                    {m.major && <span>التخصص: {m.major}</span>}
                                   </div>
                                 </div>
                               ))}

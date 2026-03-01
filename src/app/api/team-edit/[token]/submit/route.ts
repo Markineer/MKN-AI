@@ -27,35 +27,17 @@ export async function POST(
     );
 
   const body = await req.json();
+
+  if (!body.nameAr?.trim())
+    return NextResponse.json({ error: "اسم الفريق مطلوب" }, { status: 400 });
+
+  if (!Array.isArray(body.members) || body.members.length === 0)
+    return NextResponse.json({ error: "يجب أن يكون هناك عضو واحد على الأقل" }, { status: 400 });
+
   const proposedData = {
     nameAr: body.nameAr,
-    trackId: body.trackId,
-    members: body.members, // [{ userId, fullName, personalEmail, universityEmail, studentId, college, major, techLink, role, memberRole }]
+    members: body.members, // [{ userId, fullName, personalEmail, universityEmail, studentId, college, major, techLink, role, memberRole, isNew? }]
   };
-
-  // Validate track capacity if track changed
-  const originalData = editRequest.originalData as any;
-  if (proposedData.trackId && proposedData.trackId !== originalData.trackId) {
-    const targetTrack = await prisma.eventTrack.findUnique({
-      where: { id: proposedData.trackId },
-      include: { _count: { select: { teams: true } } },
-    });
-
-    if (!targetTrack)
-      return NextResponse.json({ error: "المسار غير موجود" }, { status: 400 });
-
-    if (targetTrack.maxTeams !== null) {
-      const adjustedCount =
-        proposedData.trackId === originalData.trackId
-          ? targetTrack._count.teams - 1
-          : targetTrack._count.teams;
-      if (adjustedCount >= targetTrack.maxTeams)
-        return NextResponse.json(
-          { error: "هذا المسار مكتمل العدد. يرجى اختيار مسار آخر." },
-          { status: 409 }
-        );
-    }
-  }
 
   await prisma.teamEditRequest.update({
     where: { id: editRequest.id },

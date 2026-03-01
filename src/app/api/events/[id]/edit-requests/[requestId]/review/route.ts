@@ -57,58 +57,51 @@ export async function POST(
 
   // APPROVE — apply changes in a transaction
   const proposed = editRequest.proposedData as any;
+  const original = editRequest.originalData as any;
   if (!proposed)
     return NextResponse.json(
       { error: "لا توجد تعديلات مقترحة" },
       { status: 400 }
     );
 
-  // Re-validate track capacity
-  if (proposed.trackId) {
-    const original = editRequest.originalData as any;
-    if (proposed.trackId !== original.trackId) {
-      const targetTrack = await prisma.eventTrack.findUnique({
-        where: { id: proposed.trackId },
-        include: { _count: { select: { teams: true } } },
-      });
-      if (
-        targetTrack?.maxTeams !== null &&
-        targetTrack &&
-        targetTrack._count.teams >= targetTrack.maxTeams!
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "المسار المطلوب أصبح مكتمل العدد. يرجى رفض الطلب وإنشاء طلب جديد.",
-          },
-          { status: 409 }
-        );
-      }
-    }
-  }
-
   await prisma.$transaction(async (tx) => {
-    // Update team-level fields
-    const teamUpdate: any = {};
-    if (proposed.nameAr !== undefined) teamUpdate.nameAr = proposed.nameAr;
-    if (proposed.trackId !== undefined) teamUpdate.trackId = proposed.trackId;
-
-    if (Object.keys(teamUpdate).length > 0) {
+    // Update team name if changed
+    if (proposed.nameAr !== undefined && proposed.nameAr !== original.nameAr) {
       await tx.team.update({
         where: { id: editRequest.teamId },
-        data: teamUpdate,
+        data: { nameAr: proposed.nameAr },
       });
     }
 
-    // Update member registration fields
     if (Array.isArray(proposed.members)) {
+      const originalMemberIds = new Set(
+        (original.members || []).map((m: any) => m.userId)
+      );
+      const proposedMemberIds = new Set(
+        proposed.members.map((m: any) => m.userId)
+      );
+
+      // Deactivate removed members
+      for (const om of original.members || []) {
+        if (!proposedMemberIds.has(om.userId)) {
+          await tx.teamMember.updateMany({
+            where: { teamId: editRequest.teamId, userId: om.userId },
+            data: { isActive: false },
+          });
+        }
+      }
+
+      // Update existing members' registration data
       for (const member of proposed.members) {
-        // Build bio string from registration fields
+        if (member.isNew || !originalMemberIds.has(member.userId)) continue;
+
         const bioParts = [
           member.college ? `الكلية: ${member.college}` : null,
           member.major ? `التخصص: ${member.major}` : null,
           member.memberRole ? `الدور: ${member.memberRole}` : null,
-          member.universityEmail ? `الإيميل الجامعي: ${member.universityEmail}` : null,
+          member.universityEmail
+            ? `الإيميل الجامعي: ${member.universityEmail}`
+            : null,
           member.studentId ? `الرقم الجامعي: ${member.studentId}` : null,
           member.techLink ? `الملف التقني: ${member.techLink}` : null,
         ].filter(Boolean);
@@ -117,19 +110,16 @@ export async function POST(
           bio: bioParts.join(" | "),
         };
 
-        // Update name from fullName
         if (member.fullName) {
           const nameParts = member.fullName.trim().split(/\s+/);
           userUpdate.firstNameAr = nameParts[0] || "";
           userUpdate.lastNameAr = nameParts.slice(1).join(" ") || "";
         }
 
-        // Update email if changed
         if (member.personalEmail) {
           userUpdate.email = member.personalEmail;
         }
 
-        // Update structured fields
         if (member.college) userUpdate.collegeAr = member.college;
         if (member.major) userUpdate.majorAr = member.major;
         if (member.studentId) userUpdate.nationalId = member.studentId;
@@ -137,6 +127,65 @@ export async function POST(
         await tx.user.update({
           where: { id: member.userId },
           data: userUpdate,
+        });
+      }
+
+      // Add new members — create User + TeamMember records
+      for (const member of proposed.members) {
+        if (!member.isNew && originalMemberIds.has(member.userId)) continue;
+
+        const bioParts = [
+          member.college ? `الكلية: ${member.college}` : null,
+          member.major ? `التخصص: ${member.major}` : null,
+          member.memberRole ? `الدور: ${member.memberRole}` : null,
+          member.universityEmail
+            ? `الإيميل الجامعي: ${member.universityEmail}`
+            : null,
+          member.studentId ? `الرقم الجامعي: ${member.studentId}` : null,
+          member.techLink ? `الملف التقني: ${member.techLink}` : null,
+        ].filter(Boolean);
+
+        const nameParts = (member.fullName || "").trim().split(/\s+/);
+
+        // Create or find user by email
+        let user;
+        if (member.personalEmail) {
+          user = await tx.user.findUnique({
+            where: { email: member.personalEmail },
+          });
+        }
+
+        if (!user) {
+          user = await tx.user.create({
+            data: {
+              email: member.personalEmail || `new_${Date.now()}@temp.local`,
+              password: "",
+              firstName: nameParts[0] || "",
+              lastName: nameParts.slice(1).join(" ") || "",
+              firstNameAr: nameParts[0] || "",
+              lastNameAr: nameParts.slice(1).join(" ") || "",
+              bio: bioParts.join(" | "),
+              collegeAr: member.college || null,
+              majorAr: member.major || null,
+              nationalId: member.studentId || null,
+            },
+          });
+        }
+
+        // Add as team member
+        await tx.teamMember.upsert({
+          where: {
+            teamId_userId: {
+              teamId: editRequest.teamId,
+              userId: user.id,
+            },
+          },
+          update: { isActive: true, role: "MEMBER" },
+          create: {
+            teamId: editRequest.teamId,
+            userId: user.id,
+            role: "MEMBER",
+          },
         });
       }
     }
@@ -153,5 +202,7 @@ export async function POST(
     });
   });
 
-  return NextResponse.json({ message: "تمت الموافقة على التعديلات وتم تحديث بيانات الفريق" });
+  return NextResponse.json({
+    message: "تمت الموافقة على التعديلات وتم تحديث بيانات الفريق",
+  });
 }

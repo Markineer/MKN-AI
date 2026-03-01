@@ -49,7 +49,6 @@ export async function GET(
       event: {
         select: { id: true, title: true, titleAr: true, minTeamSize: true, maxTeamSize: true },
       },
-      track: { select: { id: true, name: true, nameAr: true, color: true } },
       members: {
         where: { isActive: true },
         include: {
@@ -70,24 +69,6 @@ export async function GET(
 
   if (!team)
     return NextResponse.json({ error: "الفريق غير موجود" }, { status: 404 });
-
-  // Tracks with capacity
-  const tracks = await prisma.eventTrack.findMany({
-    where: { eventId: editRequest.eventId, isActive: true },
-    include: { _count: { select: { teams: true } } },
-    orderBy: { sortOrder: "asc" },
-  });
-
-  const tracksWithCapacity = tracks.map((track) => {
-    const adjustedCount = track.id === team.trackId ? track._count.teams - 1 : track._count.teams;
-    const isFull = track.maxTeams !== null && adjustedCount >= track.maxTeams;
-    const remaining = track.maxTeams !== null ? track.maxTeams - adjustedCount : null;
-    return {
-      id: track.id, name: track.name, nameAr: track.nameAr,
-      color: track.color, maxTeams: track.maxTeams,
-      currentTeams: adjustedCount, remaining, isFull,
-    };
-  });
 
   // Build member data with registration fields
   const members = team.members.map((m) => {
@@ -112,10 +93,8 @@ export async function GET(
     team: {
       id: team.id,
       nameAr: team.nameAr || team.name,
-      trackId: team.trackId,
       members,
     },
     event: team.event,
-    tracks: tracksWithCapacity,
   });
 }

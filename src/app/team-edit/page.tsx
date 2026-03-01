@@ -4,7 +4,8 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Loader2, Save, AlertCircle, CheckCircle2, Users,
-  Crown, MapPin, GraduationCap, Mail, Hash, Link as LinkIcon, User,
+  Crown, GraduationCap, Mail, Hash, Link as LinkIcon, User,
+  Plus, Trash2,
 } from "lucide-react";
 
 interface MemberData {
@@ -18,17 +19,7 @@ interface MemberData {
   major: string;
   techLink: string;
   memberRole: string;
-}
-
-interface TrackInfo {
-  id: string;
-  name: string;
-  nameAr: string;
-  color: string | null;
-  maxTeams: number | null;
-  currentTeams: number;
-  remaining: number | null;
-  isFull: boolean;
+  isNew?: boolean;
 }
 
 export default function TeamEditPage() {
@@ -56,11 +47,9 @@ function TeamEditContent() {
   const [success, setSuccess] = useState(false);
 
   const [event, setEvent] = useState<any>(null);
-  const [tracks, setTracks] = useState<TrackInfo[]>([]);
 
   // Form state
   const [nameAr, setNameAr] = useState("");
-  const [trackId, setTrackId] = useState<string | null>(null);
   const [members, setMembers] = useState<MemberData[]>([]);
 
   const [showConfirm, setShowConfirm] = useState(false);
@@ -77,9 +66,7 @@ function TeamEditContent() {
       if (!res.ok) { setError(data.error || "حدث خطأ"); setLoading(false); return; }
 
       setEvent(data.event);
-      setTracks(data.tracks);
       setNameAr(data.team.nameAr || "");
-      setTrackId(data.team.trackId);
       setMembers(data.team.members);
     } catch {
       setError("حدث خطأ في الاتصال");
@@ -92,6 +79,29 @@ function TeamEditContent() {
     setMembers((prev) => prev.map((m, i) => i === index ? { ...m, [field]: value } : m));
   }
 
+  function addMember() {
+    setMembers((prev) => [
+      ...prev,
+      {
+        userId: `new_${Date.now()}`,
+        role: "MEMBER",
+        fullName: "",
+        personalEmail: "",
+        universityEmail: "",
+        studentId: "",
+        college: "",
+        major: "",
+        techLink: "",
+        memberRole: "",
+        isNew: true,
+      },
+    ]);
+  }
+
+  function removeMember(index: number) {
+    setMembers((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function handleSubmit() {
     setShowConfirm(false);
     setSubmitting(true);
@@ -101,7 +111,7 @@ function TeamEditContent() {
       const res = await fetch(`/api/team-edit/${token}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nameAr, trackId, members }),
+        body: JSON.stringify({ nameAr, members }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "حدث خطأ"); setSubmitting(false); return; }
@@ -162,7 +172,7 @@ function TeamEditContent() {
       )}
 
       <div className="space-y-6">
-        {/* Section 1: Team Info */}
+        {/* Section 1: Team Name */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
           <h2 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
             <Users className="w-4 h-4" />
@@ -179,47 +189,21 @@ function TeamEditContent() {
           </div>
         </div>
 
-        {/* Section 2: Track */}
-        {tracks.length > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <h2 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <MapPin className="w-4 h-4" />
-              المسار
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {tracks.map((track) => (
-                <button
-                  key={track.id}
-                  onClick={() => !track.isFull && setTrackId(track.id)}
-                  disabled={track.isFull}
-                  className={`relative flex items-center gap-3 p-4 rounded-xl border-2 text-right transition-all ${
-                    trackId === track.id
-                      ? "border-purple-500 bg-purple-50"
-                      : track.isFull
-                      ? "border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed"
-                      : "border-gray-100 bg-white hover:border-purple-200"
-                  }`}
-                >
-                  <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: track.color || "#7C3AED" }} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">{track.nameAr || track.name}</p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
-                      {track.isFull ? "مكتمل" : track.remaining !== null ? `${track.remaining} مقعد متاح` : "مفتوح"}
-                    </p>
-                  </div>
-                  {trackId === track.id && <CheckCircle2 className="w-5 h-5 text-purple-500 flex-shrink-0" />}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Section 3: Members */}
+        {/* Section 2: Members */}
         <div className="space-y-4">
-          <h2 className="text-sm font-bold text-gray-800 flex items-center gap-2 px-1">
-            <GraduationCap className="w-4 h-4" />
-            بيانات الأعضاء ({members.length})
-          </h2>
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+              <GraduationCap className="w-4 h-4" />
+              بيانات الأعضاء ({members.length})
+            </h2>
+            <button
+              onClick={addMember}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-xs font-medium hover:bg-purple-200 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              إضافة عضو
+            </button>
+          </div>
 
           {members.map((member, idx) => (
             <div key={member.userId} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
@@ -230,11 +214,19 @@ function TeamEditContent() {
                 <h3 className="text-sm font-bold text-gray-800 flex-1">
                   {member.fullName || `عضو ${idx + 1}`}
                 </h3>
-                {member.role === "LEADER" && (
+                {member.role === "LEADER" ? (
                   <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
                     <Crown className="w-3 h-3" />
                     قائد
                   </span>
+                ) : (
+                  <button
+                    onClick={() => removeMember(idx)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] text-red-500 hover:bg-red-50 transition-colors border border-red-200"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    حذف
+                  </button>
                 )}
               </div>
 
@@ -350,7 +342,7 @@ function TeamEditContent() {
         <div className="flex justify-end gap-3 pt-2">
           <button
             onClick={() => setShowConfirm(true)}
-            disabled={submitting || !nameAr.trim()}
+            disabled={submitting || !nameAr.trim() || members.length === 0}
             className="flex items-center gap-2 px-8 py-3 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
