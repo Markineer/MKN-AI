@@ -267,3 +267,50 @@ export async function sendPhaseEliminationEmail({
 
   return sendMail(to, `نتائج ${phaseName} | ${eventName} — مكن AI`, html);
 }
+
+// ─── Team Edit Request Email ────────────────────────────────────
+
+interface TeamEditRequestEmailParams {
+  to: string;
+  teamNameAr: string;
+  eventNameAr: string;
+  adminNameAr: string;
+  token: string;
+}
+
+export async function sendTeamEditRequestEmail({
+  to, teamNameAr, eventNameAr, adminNameAr, token,
+}: TeamEditRequestEmailParams) {
+  const editUrl = `${APP_URL}/team-edit?token=${token}`;
+
+  const html = `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#F9FAFB;font-family:'Cairo','Segoe UI',Tahoma,sans-serif;">
+  <div style="max-width:520px;margin:40px auto;background:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid #E5E7EB;">
+    <div style="background:linear-gradient(135deg,#7C3AED,#6D28D9);padding:32px 24px;text-align:center;">
+      <h1 style="margin:0;color:#FFFFFF;font-size:24px;font-weight:800;">مكن<span style="font-size:14px;vertical-align:super;margin-right:2px;">AI</span></h1>
+      <p style="margin:8px 0 0;color:#DDD6FE;font-size:14px;">طلب تعديل بيانات الفريق</p>
+    </div>
+    <div style="padding:32px 24px;">
+      <p style="margin:0 0 20px;color:#1F2937;font-size:16px;line-height:1.7;">مرحباً،<br/>طلب منك <strong>${adminNameAr}</strong> تعديل بيانات فريقك:</p>
+      <div style="background:#F9FAFB;border-radius:12px;padding:16px 20px;margin:0 0 24px;border:1px solid #E5E7EB;">
+        <p style="margin:0 0 4px;color:#6B7280;font-size:14px;">الفريق: <strong style="color:#1F2937;">${teamNameAr}</strong></p>
+        <p style="margin:0;color:#6B7280;font-size:14px;">الفعالية: <strong style="color:#7C3AED;">${eventNameAr}</strong></p>
+      </div>
+      <p style="margin:0 0 24px;color:#6B7280;font-size:14px;line-height:1.6;">يمكنك تعديل بيانات الفريق من خلال الرابط أدناه. يرجى تسجيل الدخول أولاً ثم الضغط على الزر:</p>
+      <div style="text-align:center;margin:0 0 24px;">
+        <a href="${editUrl}" style="display:inline-block;background:#7C3AED;color:#FFFFFF;text-decoration:none;padding:14px 40px;border-radius:12px;font-size:15px;font-weight:700;box-shadow:0 4px 14px rgba(124,58,237,0.25);">تعديل بيانات الفريق</a>
+      </div>
+      <p style="margin:0;color:#9CA3AF;font-size:12px;text-align:center;line-height:1.6;">هذا الرابط صالح لمدة 7 أيام ويمكن استخدامه مرة واحدة فقط. إذا لم تكن تتوقع هذه الرسالة، يمكنك تجاهلها.</p>
+    </div>
+    <div style="border-top:1px solid #E5E7EB;padding:16px 24px;text-align:center;">
+      <p style="margin:0;color:#9CA3AF;font-size:11px;">منصة مكن AI — من علم وماركنير</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  return sendMail(to, `طلب تعديل بيانات الفريق | ${eventNameAr} — مكن AI`, html);
+}

@@ -16,6 +16,8 @@ import {
   Filter,
   Hash,
   MapPin,
+  FileEdit,
+  Loader2 as Loader2Icon,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -83,6 +85,8 @@ export default function TeamsPage() {
   const [filterTrack, setFilterTrack] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
+  const [sendingEditRequest, setSendingEditRequest] = useState<string | null>(null);
+  const [editRequestMsg, setEditRequestMsg] = useState<{ teamId: string; msg: string; ok: boolean } | null>(null);
 
   useEffect(() => {
     fetchTeams();
@@ -144,6 +148,26 @@ export default function TeamsPage() {
     return result;
   }
 
+  async function handleSendEditRequest(teamId: string) {
+    setSendingEditRequest(teamId);
+    setEditRequestMsg(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/teams/${teamId}/edit-request`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setEditRequestMsg({ teamId, msg: data.message, ok: true });
+      } else {
+        setEditRequestMsg({ teamId, msg: data.error, ok: false });
+      }
+    } catch {
+      setEditRequestMsg({ teamId, msg: "حدث خطأ في الاتصال", ok: false });
+    } finally {
+      setSendingEditRequest(null);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -170,6 +194,13 @@ export default function TeamsPage() {
             </p>
           </div>
         </div>
+        <Link
+          href={`/event/${eventId}/edit-requests`}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          <FileEdit className="w-4 h-4" />
+          طلبات التعديل
+        </Link>
       </div>
 
       {/* Stats Cards */}
@@ -469,6 +500,31 @@ export default function TeamsPage() {
                           </div>
                         );
                       })}
+                    </div>
+
+                    {/* Edit Request Button */}
+                    <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+                      {editRequestMsg && editRequestMsg.teamId === team.id && (
+                        <p className={`text-xs ${editRequestMsg.ok ? "text-emerald-600" : "text-red-500"}`}>
+                          {editRequestMsg.msg}
+                        </p>
+                      )}
+                      <div className="mr-auto" />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSendEditRequest(team.id);
+                        }}
+                        disabled={sendingEditRequest === team.id}
+                        className="flex items-center gap-2 px-4 py-2 bg-brand-50 text-brand-600 rounded-xl text-xs font-medium hover:bg-brand-100 disabled:opacity-50 transition-colors"
+                      >
+                        {sendingEditRequest === team.id ? (
+                          <Loader2Icon className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <FileEdit className="w-3.5 h-3.5" />
+                        )}
+                        طلب تعديل البيانات
+                      </button>
                     </div>
                   </div>
                 )}
