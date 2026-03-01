@@ -55,16 +55,21 @@ const FROM_ADDRESS = SMTP_FROM || "مكن AI <noreply@makan.ai>";
 async function sendMail(to: string, subject: string, html: string) {
   console.log(`[mail] Attempting to send to ${to} | SMTP: ${smtpConfig ? `${smtpConfig.host}:${smtpConfig.port}` : "none"} | Resend: ${process.env.RESEND_API_KEY ? "yes" : "no"}`);
 
+  // Try SMTP first
   if (transporter) {
-    // SMTP
-    const info = await transporter.sendMail({
-      from: `"مكن AI" <${FROM_ADDRESS}>`,
-      to,
-      subject,
-      html,
-    });
-    console.log(`[mail/smtp] Sent to ${to}: ${info.messageId}`);
-    return { id: info.messageId };
+    try {
+      const info = await transporter.sendMail({
+        from: `"مكن AI" <${FROM_ADDRESS}>`,
+        to,
+        subject,
+        html,
+      });
+      console.log(`[mail/smtp] Sent to ${to}: ${info.messageId}`);
+      return { id: info.messageId };
+    } catch (smtpErr: any) {
+      console.error(`[mail/smtp] Failed for ${to}: ${smtpErr.message}`);
+      // Fall through to Resend
+    }
   }
 
   // Fallback: Resend
@@ -74,6 +79,7 @@ async function sendMail(to: string, subject: string, html: string) {
     throw new Error("No email transport configured");
   }
 
+  console.log(`[mail/resend] Falling back to Resend for ${to}`);
   const { Resend } = await import("resend");
   const resend = new Resend(resendKey);
   const from = process.env.EMAIL_FROM || FROM_ADDRESS;
