@@ -33,12 +33,12 @@ export async function POST(
         include: {
           user: {
             select: {
-              id: true,
-              email: true,
-              firstName: true,
-              firstNameAr: true,
-              lastName: true,
-              lastNameAr: true,
+              id: true, email: true,
+              firstName: true, firstNameAr: true,
+              lastName: true, lastNameAr: true,
+              nationalId: true, college: true, collegeAr: true,
+              major: true, majorAr: true,
+              bio: true,
             },
           },
         },
@@ -74,27 +74,32 @@ export async function POST(
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-  // Snapshot current data
+  // Helper to parse bio fields
+  const parseBio = (bio: string | null) => {
+    if (!bio) return { universityEmail: "", studentId: "", college: "", major: "", techLink: "", role: "" };
+    const get = (label: string) => { const m = bio.match(new RegExp(`${label}:\\s*([^|]+)`)); return m ? m[1].trim() : ""; };
+    return { universityEmail: get("الإيميل الجامعي"), studentId: get("الرقم الجامعي"), college: get("الكلية"), major: get("التخصص"), techLink: get("الملف التقني"), role: get("الدور") };
+  };
+
+  // Snapshot current data (registration fields)
   const originalData = {
-    name: team.name,
     nameAr: team.nameAr,
-    description: team.description,
     trackId: team.trackId,
-    projectTitle: team.projectTitle,
-    projectTitleAr: team.projectTitleAr,
-    projectDescription: team.projectDescription,
-    projectDescriptionAr: team.projectDescriptionAr,
-    repositoryUrl: team.repositoryUrl,
-    presentationUrl: team.presentationUrl,
-    demoUrl: team.demoUrl,
-    miroBoard: team.miroBoard,
-    members: team.members.map((m) => ({
-      userId: m.user.id,
-      email: m.user.email,
-      firstNameAr: m.user.firstNameAr,
-      lastNameAr: m.user.lastNameAr,
-      role: m.role,
-    })),
+    members: team.members.map((m) => {
+      const bio = parseBio(m.user.bio);
+      return {
+        userId: m.user.id,
+        role: m.role,
+        fullName: m.user.firstNameAr ? `${m.user.firstNameAr} ${m.user.lastNameAr || ""}`.trim() : `${m.user.firstName} ${m.user.lastName || ""}`.trim(),
+        personalEmail: m.user.email,
+        universityEmail: bio.universityEmail,
+        studentId: m.user.nationalId || bio.studentId,
+        college: m.user.collegeAr || m.user.college || bio.college,
+        major: m.user.majorAr || m.user.major || bio.major,
+        techLink: bio.techLink,
+        memberRole: bio.role,
+      };
+    }),
   };
 
   // Create edit request

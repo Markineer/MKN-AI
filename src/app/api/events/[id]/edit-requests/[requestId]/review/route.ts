@@ -88,66 +88,55 @@ export async function POST(
   }
 
   await prisma.$transaction(async (tx) => {
-    // Update team fields
-    await tx.team.update({
-      where: { id: editRequest.teamId },
-      data: {
-        name: proposed.name,
-        nameAr: proposed.nameAr,
-        description: proposed.description,
-        trackId: proposed.trackId,
-        projectTitle: proposed.projectTitle,
-        projectTitleAr: proposed.projectTitleAr,
-        projectDescription: proposed.projectDescription,
-        projectDescriptionAr: proposed.projectDescriptionAr,
-        repositoryUrl: proposed.repositoryUrl,
-        presentationUrl: proposed.presentationUrl,
-        demoUrl: proposed.demoUrl,
-        miroBoard: proposed.miroBoard,
-      },
-    });
+    // Update team-level fields
+    const teamUpdate: any = {};
+    if (proposed.nameAr !== undefined) teamUpdate.nameAr = proposed.nameAr;
+    if (proposed.trackId !== undefined) teamUpdate.trackId = proposed.trackId;
 
-    // Sync members
-    if (Array.isArray(proposed.members)) {
-      const currentMembers = await tx.teamMember.findMany({
-        where: { teamId: editRequest.teamId, isActive: true },
-        select: { userId: true, role: true },
+    if (Object.keys(teamUpdate).length > 0) {
+      await tx.team.update({
+        where: { id: editRequest.teamId },
+        data: teamUpdate,
       });
+    }
 
-      const proposedMemberIds = new Set(
-        proposed.members.map((m: any) => m.userId)
-      );
-      const currentMemberIds = new Set(currentMembers.map((m) => m.userId));
+    // Update member registration fields
+    if (Array.isArray(proposed.members)) {
+      for (const member of proposed.members) {
+        // Build bio string from registration fields
+        const bioParts = [
+          member.college ? `الكلية: ${member.college}` : null,
+          member.major ? `التخصص: ${member.major}` : null,
+          member.memberRole ? `الدور: ${member.memberRole}` : null,
+          member.universityEmail ? `الإيميل الجامعي: ${member.universityEmail}` : null,
+          member.studentId ? `الرقم الجامعي: ${member.studentId}` : null,
+          member.techLink ? `الملف التقني: ${member.techLink}` : null,
+        ].filter(Boolean);
 
-      // Deactivate removed members
-      const toRemove = currentMembers.filter(
-        (m) => !proposedMemberIds.has(m.userId)
-      );
-      for (const member of toRemove) {
-        await tx.teamMember.updateMany({
-          where: { teamId: editRequest.teamId, userId: member.userId },
-          data: { isActive: false },
-        });
-      }
+        const userUpdate: any = {
+          bio: bioParts.join(" | "),
+        };
 
-      // Add new members
-      const toAdd = proposed.members.filter(
-        (m: any) => !currentMemberIds.has(m.userId)
-      );
-      for (const member of toAdd) {
-        await tx.teamMember.upsert({
-          where: {
-            teamId_userId: {
-              teamId: editRequest.teamId,
-              userId: member.userId,
-            },
-          },
-          update: { isActive: true, role: member.role || "MEMBER" },
-          create: {
-            teamId: editRequest.teamId,
-            userId: member.userId,
-            role: member.role || "MEMBER",
-          },
+        // Update name from fullName
+        if (member.fullName) {
+          const nameParts = member.fullName.trim().split(/\s+/);
+          userUpdate.firstNameAr = nameParts[0] || "";
+          userUpdate.lastNameAr = nameParts.slice(1).join(" ") || "";
+        }
+
+        // Update email if changed
+        if (member.personalEmail) {
+          userUpdate.email = member.personalEmail;
+        }
+
+        // Update structured fields
+        if (member.college) userUpdate.collegeAr = member.college;
+        if (member.major) userUpdate.majorAr = member.major;
+        if (member.studentId) userUpdate.nationalId = member.studentId;
+
+        await tx.user.update({
+          where: { id: member.userId },
+          data: userUpdate,
         });
       }
     }

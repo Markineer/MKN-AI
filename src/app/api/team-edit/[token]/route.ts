@@ -1,6 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
+// Parse bio string to extract university_email and tech_link
+function parseBio(bio: string | null): { universityEmail: string; studentId: string; college: string; major: string; techLink: string; role: string } {
+  if (!bio) return { universityEmail: "", studentId: "", college: "", major: "", techLink: "", role: "" };
+  const get = (label: string) => {
+    const match = bio.match(new RegExp(`${label}:\\s*([^|]+)`));
+    return match ? match[1].trim() : "";
+  };
+  return {
+    universityEmail: get("الإيميل الجامعي"),
+    studentId: get("الرقم الجامعي"),
+    college: get("الكلية"),
+    major: get("التخصص"),
+    techLink: get("الملف التقني"),
+    role: get("الدور"),
+  };
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { token: string } }
@@ -12,7 +29,6 @@ export async function GET(
   if (!editRequest)
     return NextResponse.json({ error: "رابط غير صالح" }, { status: 404 });
 
-  // Check expiry
   if (editRequest.expiresAt < new Date()) {
     await prisma.teamEditRequest.update({
       where: { id: editRequest.id },
@@ -21,25 +37,17 @@ export async function GET(
     return NextResponse.json({ error: "انتهت صلاحية الرابط" }, { status: 410 });
   }
 
-  // Only PENDING requests can be edited
   if (editRequest.status !== "PENDING")
     return NextResponse.json(
       { error: "تم استخدام هذا الرابط مسبقاً", status: editRequest.status },
       { status: 410 }
     );
 
-  // Fetch fresh team data
   const team = await prisma.team.findUnique({
     where: { id: editRequest.teamId },
     include: {
       event: {
-        select: {
-          id: true,
-          title: true,
-          titleAr: true,
-          minTeamSize: true,
-          maxTeamSize: true,
-        },
+        select: { id: true, title: true, titleAr: true, minTeamSize: true, maxTeamSize: true },
       },
       track: { select: { id: true, name: true, nameAr: true, color: true } },
       members: {
@@ -47,12 +55,12 @@ export async function GET(
         include: {
           user: {
             select: {
-              id: true,
-              email: true,
-              firstName: true,
-              firstNameAr: true,
-              lastName: true,
-              lastNameAr: true,
+              id: true, email: true,
+              firstName: true, firstNameAr: true,
+              lastName: true, lastNameAr: true,
+              nationalId: true, college: true, collegeAr: true,
+              major: true, majorAr: true,
+              bio: true, bioAr: true,
             },
           },
         },
@@ -63,7 +71,7 @@ export async function GET(
   if (!team)
     return NextResponse.json({ error: "الفريق غير موجود" }, { status: 404 });
 
-  // Fetch tracks with capacity info
+  // Tracks with capacity
   const tracks = await prisma.eventTrack.findMany({
     where: { eventId: editRequest.eventId, isActive: true },
     include: { _count: { select: { teams: true } } },
@@ -71,106 +79,43 @@ export async function GET(
   });
 
   const tracksWithCapacity = tracks.map((track) => {
-    const currentCount = track._count.teams;
-    // Don't count the current team against its own track
-    const adjustedCount =
-      track.id === team.trackId ? currentCount - 1 : currentCount;
-    const isFull =
-      track.maxTeams !== null && adjustedCount >= track.maxTeams;
-    const remaining =
-      track.maxTeams !== null ? track.maxTeams - adjustedCount : null;
-
+    const adjustedCount = track.id === team.trackId ? track._count.teams - 1 : track._count.teams;
+    const isFull = track.maxTeams !== null && adjustedCount >= track.maxTeams;
+    const remaining = track.maxTeams !== null ? track.maxTeams - adjustedCount : null;
     return {
-      id: track.id,
-      name: track.name,
-      nameAr: track.nameAr,
-      color: track.color,
-      domain: track.domain,
-      maxTeams: track.maxTeams,
-      currentTeams: adjustedCount,
-      remaining,
-      isFull,
+      id: track.id, name: track.name, nameAr: track.nameAr,
+      color: track.color, maxTeams: track.maxTeams,
+      currentTeams: adjustedCount, remaining, isFull,
     };
   });
 
-  // Fetch available participants (not in any team in this event)
-  const eventParticipants = await prisma.eventMember.findMany({
-    where: {
-      eventId: editRequest.eventId,
-      role: "PARTICIPANT",
-      status: "APPROVED",
-    },
-    include: {
-      user: {
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          firstNameAr: true,
-          lastName: true,
-          lastNameAr: true,
-        },
-      },
-    },
+  // Build member data with registration fields
+  const members = team.members.map((m) => {
+    const bioData = parseBio(m.user.bio);
+    return {
+      userId: m.user.id,
+      role: m.role,
+      fullName: m.user.firstNameAr
+        ? `${m.user.firstNameAr} ${m.user.lastNameAr || ""}`.trim()
+        : `${m.user.firstName} ${m.user.lastName || ""}`.trim(),
+      personalEmail: m.user.email,
+      universityEmail: bioData.universityEmail,
+      studentId: m.user.nationalId || bioData.studentId,
+      college: m.user.collegeAr || m.user.college || bioData.college,
+      major: m.user.majorAr || m.user.major || bioData.major,
+      techLink: bioData.techLink,
+      memberRole: bioData.role,
+    };
   });
-
-  // Get all active team members in this event (across all teams)
-  const allTeamMembers = await prisma.teamMember.findMany({
-    where: {
-      team: { eventId: editRequest.eventId },
-      isActive: true,
-    },
-    select: { userId: true, teamId: true },
-  });
-
-  const currentTeamMemberIds = new Set(
-    allTeamMembers.filter((m) => m.teamId === team.id).map((m) => m.userId)
-  );
-  const takenUserIds = new Set(
-    allTeamMembers.filter((m) => m.teamId !== team.id).map((m) => m.userId)
-  );
-
-  const availableParticipants = eventParticipants
-    .filter(
-      (ep) =>
-        !takenUserIds.has(ep.userId) && !currentTeamMemberIds.has(ep.userId)
-    )
-    .map((ep) => ({
-      userId: ep.user.id,
-      email: ep.user.email,
-      firstName: ep.user.firstName,
-      firstNameAr: ep.user.firstNameAr,
-      lastName: ep.user.lastName,
-      lastNameAr: ep.user.lastNameAr,
-    }));
 
   return NextResponse.json({
     team: {
       id: team.id,
-      name: team.name,
-      nameAr: team.nameAr,
-      description: team.description,
+      nameAr: team.nameAr || team.name,
       trackId: team.trackId,
-      projectTitle: team.projectTitle,
-      projectTitleAr: team.projectTitleAr,
-      projectDescription: team.projectDescription,
-      projectDescriptionAr: team.projectDescriptionAr,
-      repositoryUrl: team.repositoryUrl,
-      presentationUrl: team.presentationUrl,
-      demoUrl: team.demoUrl,
-      miroBoard: team.miroBoard,
-      members: team.members.map((m) => ({
-        userId: m.user.id,
-        email: m.user.email,
-        firstName: m.user.firstName,
-        firstNameAr: m.user.firstNameAr,
-        lastName: m.user.lastName,
-        lastNameAr: m.user.lastNameAr,
-        role: m.role,
-      })),
+      members,
     },
     event: team.event,
     tracks: tracksWithCapacity,
-    availableParticipants,
   });
 }

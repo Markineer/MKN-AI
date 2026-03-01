@@ -28,19 +28,9 @@ export async function POST(
 
   const body = await req.json();
   const proposedData = {
-    name: body.name,
     nameAr: body.nameAr,
-    description: body.description,
     trackId: body.trackId,
-    projectTitle: body.projectTitle,
-    projectTitleAr: body.projectTitleAr,
-    projectDescription: body.projectDescription,
-    projectDescriptionAr: body.projectDescriptionAr,
-    repositoryUrl: body.repositoryUrl,
-    presentationUrl: body.presentationUrl,
-    demoUrl: body.demoUrl,
-    miroBoard: body.miroBoard,
-    members: body.members, // [{ userId, role }]
+    members: body.members, // [{ userId, fullName, personalEmail, universityEmail, studentId, college, major, techLink, role, memberRole }]
   };
 
   // Validate track capacity if track changed
@@ -55,7 +45,6 @@ export async function POST(
       return NextResponse.json({ error: "المسار غير موجود" }, { status: 400 });
 
     if (targetTrack.maxTeams !== null) {
-      // Don't count the current team if it was already in this track
       const adjustedCount =
         proposedData.trackId === originalData.trackId
           ? targetTrack._count.teams - 1
@@ -68,23 +57,6 @@ export async function POST(
     }
   }
 
-  // Validate team name uniqueness if changed
-  if (proposedData.name && proposedData.name !== originalData.name) {
-    const nameConflict = await prisma.team.findFirst({
-      where: {
-        eventId: editRequest.eventId,
-        name: proposedData.name,
-        id: { not: editRequest.teamId },
-      },
-    });
-    if (nameConflict)
-      return NextResponse.json(
-        { error: "يوجد فريق آخر بنفس الاسم في هذه الفعالية" },
-        { status: 409 }
-      );
-  }
-
-  // Update the request
   await prisma.teamEditRequest.update({
     where: { id: editRequest.id },
     data: {
