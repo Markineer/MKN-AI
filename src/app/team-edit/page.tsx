@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Loader2,
@@ -55,6 +55,21 @@ interface TeamData {
 }
 
 export default function TeamEditPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+          <Loader2 className="w-8 h-8 text-brand-500 animate-spin" />
+          <p className="text-sm text-gray-500">جاري التحميل...</p>
+        </div>
+      }
+    >
+      <TeamEditContent />
+    </Suspense>
+  );
+}
+
+function TeamEditContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
 

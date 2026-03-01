@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import prisma from "@/lib/prisma";
-import { authOptions } from "@/lib/auth";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: { token: string } }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const editRequest = await prisma.teamEditRequest.findUnique({
     where: { token: params.token },
   });
@@ -30,12 +24,6 @@ export async function POST(
     return NextResponse.json(
       { error: "تم استخدام هذا الرابط مسبقاً" },
       { status: 410 }
-    );
-
-  if ((session.user as any).id !== editRequest.leaderId)
-    return NextResponse.json(
-      { error: "هذا الرابط مخصص لقائد الفريق فقط" },
-      { status: 403 }
     );
 
   const body = await req.json();
