@@ -65,40 +65,52 @@ export async function POST() {
       summary.push("Base users verified/created");
 
       // ================================================================
-      // 3. Mishal Alzamel - multi-role test user
+      // 3. Mishal Alzamel — 3 separate accounts (one per role)
       // ================================================================
       const mishalPassword = await bcrypt.hash("Test@123", 12);
-      const mishal = await tx.user.upsert({
-        where: { email: "mishal@test.sa" },
-        update: {
-          password: mishalPassword,
-          firstName: "Mishal", firstNameAr: "مشعل",
-          lastName: "Alzamel", lastNameAr: "الزامل",
-        },
-        create: {
-          email: "mishal@test.sa", password: mishalPassword,
-          firstName: "Mishal", firstNameAr: "مشعل",
-          lastName: "Alzamel", lastNameAr: "الزامل",
-          university: "King Saud University", universityAr: "جامعة الملك سعود",
-          college: "College of Computer Science", collegeAr: "كلية علوم الحاسب",
-          major: "Computer Science", majorAr: "علوم الحاسب",
-          city: "الرياض", gender: "MALE",
-          bio: "مطور ومحكم ومدير مؤسسة - حساب اختباري متعدد الأدوار",
-          bioAr: "مطور ومحكم ومدير مؤسسة - حساب اختباري متعدد الأدوار",
-          isActive: true, isVerified: true, language: "ar",
-        },
-      });
-      summary.push(`Mishal Alzamel upserted: ${mishal.email} (${mishal.id})`);
+      const mishalBase = {
+        password: mishalPassword,
+        firstName: "Mishal", firstNameAr: "مشعل",
+        lastName: "Alzamel", lastNameAr: "الزامل",
+        university: "King Saud University", universityAr: "جامعة الملك سعود",
+        college: "College of Computer Science", collegeAr: "كلية علوم الحاسب",
+        major: "Computer Science", majorAr: "علوم الحاسب",
+        city: "الرياض", gender: "MALE" as const,
+        isActive: true, isVerified: true, language: "ar",
+      };
 
-      // Mishal as ADMIN in elm-org
+      // 3a. مشعل - مدير مؤسسة (same experience as org-admin@uqu.edu.sa)
+      const mishalAdmin = await tx.user.upsert({
+        where: { email: "mishal-admin@test.sa" },
+        update: { password: mishalPassword },
+        create: { email: "mishal-admin@test.sa", ...mishalBase, bio: "حساب اختباري - مدير مؤسسة", bioAr: "حساب اختباري - مدير مؤسسة" },
+      });
+
+      // 3b. مشعل - محكم (same experience as judge@elm.sa)
+      const mishalJudge = await tx.user.upsert({
+        where: { email: "mishal-judge@test.sa" },
+        update: { password: mishalPassword },
+        create: { email: "mishal-judge@test.sa", ...mishalBase, bio: "حساب اختباري - محكم", bioAr: "حساب اختباري - محكم" },
+      });
+
+      // 3c. مشعل - مشارك (same experience as radhyah@uqu.edu.sa)
+      const mishalParticipant = await tx.user.upsert({
+        where: { email: "mishal@test.sa" },
+        update: { password: mishalPassword },
+        create: { email: "mishal@test.sa", ...mishalBase, bio: "حساب اختباري - مشارك", bioAr: "حساب اختباري - مشارك" },
+      });
+
+      summary.push(`Mishal accounts: mishal-admin@test.sa, mishal-judge@test.sa, mishal@test.sa`);
+
+      // Assign mishal-admin as ADMIN in elm-org (like org-admin@uqu.edu.sa)
       const org = await tx.organization.findFirst({ where: { slug: "elm-org" } });
       if (org) {
         await tx.organizationMember.upsert({
-          where: { organizationId_userId: { organizationId: org.id, userId: mishal.id } },
+          where: { organizationId_userId: { organizationId: org.id, userId: mishalAdmin.id } },
           update: { role: "ADMIN" },
-          create: { organizationId: org.id, userId: mishal.id, role: "ADMIN" },
+          create: { organizationId: org.id, userId: mishalAdmin.id, role: "ADMIN" },
         });
-        summary.push(`Mishal → ADMIN in elm-org (org admin role)`);
+        summary.push(`mishal-admin@test.sa → ADMIN in elm-org`);
       }
 
       // ================================================================
@@ -319,14 +331,15 @@ export async function POST() {
       }
       summary.push(`7 event members created (1 organizer, 1 judge, 1 mentor, 4 participants)`);
 
-      // Mishal as JUDGE + PARTICIPANT
+      // mishal-judge as JUDGE (like judge@elm.sa)
       await tx.eventMember.create({
-        data: { eventId, userId: mishal.id, role: "JUDGE", status: "APPROVED", approvedAt: new Date() },
+        data: { eventId, userId: mishalJudge.id, role: "JUDGE", status: "APPROVED", approvedAt: new Date() },
       });
+      // mishal@test.sa as PARTICIPANT (like radhyah@uqu.edu.sa)
       await tx.eventMember.create({
-        data: { eventId, userId: mishal.id, role: "PARTICIPANT", status: "APPROVED", approvedAt: new Date() },
+        data: { eventId, userId: mishalParticipant.id, role: "PARTICIPANT", status: "APPROVED", approvedAt: new Date() },
       });
-      summary.push(`Mishal added as JUDGE + PARTICIPANT`);
+      summary.push(`mishal-judge → JUDGE, mishal@test.sa → PARTICIPANT`);
 
       // ================================================================
       // 11. Teams (4)
@@ -373,7 +386,7 @@ export async function POST() {
       await tx.teamMember.create({ data: { teamId: team3.id, userId: ahmad.id, role: "MEMBER" } });
       await tx.teamMember.create({ data: { teamId: team3.id, userId: sara.id, role: "MEMBER" } });
 
-      // Team 4: فريق الإبداع — Tourism track — led by Mishal
+      // Team 4: فريق الإبداع — Tourism track — led by mishal@test.sa (participant)
       const team4 = await tx.team.create({
         data: {
           eventId, trackId: tourismTrack.id,
@@ -381,7 +394,7 @@ export async function POST() {
           projectTitle: "Smart Tourism Guide", projectTitleAr: "المرشد السياحي الذكي",
         },
       });
-      await tx.teamMember.create({ data: { teamId: team4.id, userId: mishal.id, role: "LEADER" } });
+      await tx.teamMember.create({ data: { teamId: team4.id, userId: mishalParticipant.id, role: "LEADER" } });
       await tx.teamMember.create({ data: { teamId: team4.id, userId: ahmad.id, role: "MEMBER" } });
 
       summary.push(`4 teams created: الرواد, المبتكرات, التقنيات القانونية, فريق الإبداع`);
@@ -403,8 +416,9 @@ export async function POST() {
         summary.push(`Judge (judge@elm.sa) → الرواد + المبتكرات`);
       }
 
+      // mishal-judge assignments (like judge@elm.sa)
       const mishalJudgeMember = await tx.eventMember.findFirst({
-        where: { eventId, userId: mishal.id, role: "JUDGE" },
+        where: { eventId, userId: mishalJudge.id, role: "JUDGE" },
       });
 
       if (mishalJudgeMember) {
@@ -414,7 +428,7 @@ export async function POST() {
         await tx.judgeAssignment.create({
           data: { eventId, phaseId: phase2.id, judgeId: mishalJudgeMember.id, teamId: team1.id, trackId: hajjTrack.id, status: "PENDING" },
         });
-        summary.push(`Mishal (judge) → التقنيات القانونية + الرواد`);
+        summary.push(`mishal-judge → التقنيات القانونية + الرواد`);
       }
 
       // ================================================================
@@ -442,10 +456,10 @@ export async function POST() {
       // ================================================================
       // Summary
       // ================================================================
-      summary.push(`--- مشعل الزامل (mishal@test.sa / Test@123) ---`);
-      summary.push(`  مدير مؤسسة: ADMIN في elm-org → /organization/events`);
-      summary.push(`  محكم: JUDGE في ${testEvent.titleAr} → /judge + فريقين`);
-      summary.push(`  مشارك: PARTICIPANT + قائد فريق "الإبداع" → /team + /my-events`);
+      summary.push(`--- حسابات مشعل الزامل (Test@123) ---`);
+      summary.push(`  mishal-admin@test.sa → مدير مؤسسة (ADMIN في elm-org) → /organization/events`);
+      summary.push(`  mishal-judge@test.sa → محكم (JUDGE + فريقين معينين) → /judge`);
+      summary.push(`  mishal@test.sa → مشارك (PARTICIPANT + قائد فريق "الإبداع") → /team + /my-events`);
 
       return {
         eventId,
@@ -453,7 +467,11 @@ export async function POST() {
         tracks: Object.keys(tracks).length,
         teams: 4,
         judgeAssignments: 4,
-        mishalId: mishal.id,
+        mishalAccounts: {
+          admin: mishalAdmin.id,
+          judge: mishalJudge.id,
+          participant: mishalParticipant.id,
+        },
         summary,
       };
     });
