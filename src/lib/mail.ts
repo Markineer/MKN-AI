@@ -5,12 +5,19 @@ import nodemailer from "nodemailer";
 
 const SMTP_USER = process.env.SMTP_USER;
 const SMTP_PASS = process.env.SMTP_PASS;
+const SMTP_HOST = process.env.SMTP_HOST;
+const SMTP_PORT = process.env.SMTP_PORT;
 const SMTP_FROM = process.env.SMTP_FROM_EMAIL || SMTP_USER;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:8055";
 
-// Detect SMTP host from email domain
+// Detect SMTP host from email domain (or use explicit SMTP_HOST)
 function getSmtpConfig() {
   if (!SMTP_USER || !SMTP_PASS) return null;
+
+  // If SMTP_HOST is explicitly set, use it
+  if (SMTP_HOST) {
+    return { host: SMTP_HOST, port: parseInt(SMTP_PORT || "587"), secure: SMTP_PORT === "465" };
+  }
 
   const domain = SMTP_USER.split("@")[1]?.toLowerCase() || "";
 
@@ -23,7 +30,7 @@ function getSmtpConfig() {
   if (domain.includes("yahoo")) {
     return { host: "smtp.mail.yahoo.com", port: 587, secure: false };
   }
-  // Generic SMTP — try common ports
+  // Generic SMTP
   return { host: `smtp.${domain}`, port: 587, secure: false };
 }
 
@@ -35,6 +42,9 @@ const transporter = smtpConfig
       port: smtpConfig.port,
       secure: smtpConfig.secure,
       auth: { user: SMTP_USER!, pass: SMTP_PASS! },
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 10000,
     })
   : null;
 
@@ -43,6 +53,8 @@ const FROM_ADDRESS = SMTP_FROM || "مكن AI <noreply@makan.ai>";
 // ─── Core send function ─────────────────────────────────────────
 
 async function sendMail(to: string, subject: string, html: string) {
+  console.log(`[mail] Attempting to send to ${to} | SMTP: ${smtpConfig ? `${smtpConfig.host}:${smtpConfig.port}` : "none"} | Resend: ${process.env.RESEND_API_KEY ? "yes" : "no"}`);
+
   if (transporter) {
     // SMTP
     const info = await transporter.sendMail({
