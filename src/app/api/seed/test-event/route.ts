@@ -123,24 +123,21 @@ export async function POST() {
         create: { email: "mishal@test.sa", ...mishalBase, bio: "حساب اختباري - مشارك", bioAr: "حساب اختباري - مشارك" },
       });
 
-      // mishal-admin → ADMIN in elm-org
-      const org = await tx.organization.findFirst({ where: { slug: "elm-org" } });
-      if (org) {
-        await tx.organizationMember.upsert({
-          where: { organizationId_userId: { organizationId: org.id, userId: mishalAdmin.id } },
-          update: { role: "ADMIN" },
-          create: { organizationId: org.id, userId: mishalAdmin.id, role: "ADMIN" },
-        });
+      // mishal-admin → ADMIN in source event's organization (same org as thakathon-2026)
+      const sourceOrg = source.organizationId;
+      await tx.organizationMember.upsert({
+        where: { organizationId_userId: { organizationId: sourceOrg, userId: mishalAdmin.id } },
+        update: { role: "ADMIN" },
+        create: { organizationId: sourceOrg, userId: mishalAdmin.id, role: "ADMIN" },
+      });
 
-        // Clean up old org membership for mishal@test.sa (participant only, no org admin)
-        await tx.organizationMember.deleteMany({
-          where: { organizationId: org.id, userId: mishalParticipant.id },
-        });
-        // Clean up old org membership for mishal-judge (judge only, no org admin)
-        await tx.organizationMember.deleteMany({
-          where: { organizationId: org.id, userId: mishalJudge.id },
-        });
-      }
+      // Clean up ALL old org memberships for participant and judge accounts
+      await tx.organizationMember.deleteMany({ where: { userId: mishalParticipant.id } });
+      await tx.organizationMember.deleteMany({ where: { userId: mishalJudge.id } });
+      // Clean up mishal-admin from other orgs (only keep source org)
+      await tx.organizationMember.deleteMany({
+        where: { userId: mishalAdmin.id, NOT: { organizationId: sourceOrg } },
+      });
 
       summary.push(`Mishal: mishal-admin@test.sa (org admin), mishal-judge@test.sa (judge), mishal@test.sa (participant)`);
 

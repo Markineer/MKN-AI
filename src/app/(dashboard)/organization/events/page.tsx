@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import TopBar from "@/components/layout/TopBar";
 import {
@@ -84,12 +85,16 @@ function formatDate(dateStr: string): string {
 }
 
 export default function EventsPage() {
+  const { data: session } = useSession();
   const [events, setEvents] = useState<EventData[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [total, setTotal] = useState(0);
+
+  // Get user's organization IDs from session
+  const orgIds = (session?.user as any)?.orgMemberships?.map((m: any) => m.organizationId) as string[] | undefined;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -101,6 +106,10 @@ export default function EventsPage() {
         if (search) params.set("search", search);
         if (typeFilter) params.set("type", typeFilter);
         if (statusFilter) params.set("status", statusFilter);
+        // Filter by user's organization(s)
+        if (orgIds && orgIds.length > 0) {
+          params.set("organizationId", orgIds[0]);
+        }
 
         const res = await fetch(`/api/events?${params.toString()}`, {
           signal: controller.signal,
@@ -121,7 +130,7 @@ export default function EventsPage() {
       clearTimeout(debounce);
       controller.abort();
     };
-  }, [search, typeFilter, statusFilter]);
+  }, [search, typeFilter, statusFilter, orgIds?.[0]]);
 
   const typeTabs = [
     { label: "الكل", value: "" },
