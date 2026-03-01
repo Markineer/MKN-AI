@@ -3,8 +3,7 @@ import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
 // POST /api/seed/test-event
-// Clones thakathon-2026 structure into thakathon-2025 (test event)
-// so it can be used to test all features end-to-end.
+// Reads real data from thakathon-2026 and clones it into thakathon-2025.
 export async function POST() {
   try {
     const hashedPassword = await bcrypt.hash("Admin@123", 12);
@@ -13,19 +12,48 @@ export async function POST() {
       const summary: string[] = [];
 
       // ================================================================
-      // 1. Find thakathon-2025 (test event to update)
+      // 1. Find source (thakathon-2026) and target (thakathon-2025)
       // ================================================================
-      const testEvent = await tx.event.findUnique({ where: { slug: "thakathon-2025" } });
-      if (!testEvent) throw new Error("thakathon-2025 not found in database");
+      const source = await tx.event.findUnique({ where: { slug: "thakathon-2026" } });
+      if (!source) throw new Error("Source event thakathon-2026 not found");
 
-      const eventId = testEvent.id;
-      summary.push(`Found test event: ${testEvent.titleAr} (${eventId})`);
+      const target = await tx.event.findUnique({ where: { slug: "thakathon-2025" } });
+      if (!target) throw new Error("Target event thakathon-2025 not found");
+
+      const eventId = target.id;
+      summary.push(`Source: ${source.titleAr} (${source.id})`);
+      summary.push(`Target: ${target.titleAr} (${eventId})`);
 
       // ================================================================
-      // 2. Ensure required users exist
+      // 2. Read all data from source event
+      // ================================================================
+      const srcTracks = await tx.eventTrack.findMany({
+        where: { eventId: source.id },
+        orderBy: { sortOrder: "asc" },
+      });
+
+      const srcPhases = await tx.eventPhase.findMany({
+        where: { eventId: source.id },
+        orderBy: { phaseNumber: "asc" },
+      });
+
+      const srcCriteria = await tx.evaluationCriteria.findMany({
+        where: { eventId: source.id },
+        orderBy: { sortOrder: "asc" },
+      });
+
+      const srcSchedule = await tx.eventScheduleItem.findMany({
+        where: { eventId: source.id },
+        orderBy: [{ date: "asc" }, { sortOrder: "asc" }],
+      });
+
+      summary.push(`Read from source: ${srcTracks.length} tracks, ${srcPhases.length} phases, ${srcCriteria.length} criteria, ${srcSchedule.length} schedule items`);
+
+      // ================================================================
+      // 3. Ensure required users exist
       // ================================================================
       const mainUser = await tx.user.findUnique({ where: { email: "radhyah@uqu.edu.sa" } });
-      if (!mainUser) throw new Error("Main user radhyah@uqu.edu.sa not found. Run /api/seed/test-participant first.");
+      if (!mainUser) throw new Error("radhyah@uqu.edu.sa not found. Run /api/seed/test-participant first.");
 
       const ahmad = await tx.user.findUnique({ where: { email: "ahmad@test.com" } });
       const sara = await tx.user.findUnique({ where: { email: "sara@test.com" } });
@@ -62,10 +90,8 @@ export async function POST() {
         },
       });
 
-      summary.push("Base users verified/created");
-
       // ================================================================
-      // 3. Mishal Alzamel — 3 separate accounts (one per role)
+      // 4. Mishal Alzamel — 3 separate accounts
       // ================================================================
       const mishalPassword = await bcrypt.hash("Test@123", 12);
       const mishalBase = {
@@ -79,30 +105,25 @@ export async function POST() {
         isActive: true, isVerified: true, language: "ar",
       };
 
-      // 3a. مشعل - مدير مؤسسة (same experience as org-admin@uqu.edu.sa)
       const mishalAdmin = await tx.user.upsert({
         where: { email: "mishal-admin@test.sa" },
         update: { password: mishalPassword },
         create: { email: "mishal-admin@test.sa", ...mishalBase, bio: "حساب اختباري - مدير مؤسسة", bioAr: "حساب اختباري - مدير مؤسسة" },
       });
 
-      // 3b. مشعل - محكم (same experience as judge@elm.sa)
       const mishalJudge = await tx.user.upsert({
         where: { email: "mishal-judge@test.sa" },
         update: { password: mishalPassword },
         create: { email: "mishal-judge@test.sa", ...mishalBase, bio: "حساب اختباري - محكم", bioAr: "حساب اختباري - محكم" },
       });
 
-      // 3c. مشعل - مشارك (same experience as radhyah@uqu.edu.sa)
       const mishalParticipant = await tx.user.upsert({
         where: { email: "mishal@test.sa" },
         update: { password: mishalPassword },
         create: { email: "mishal@test.sa", ...mishalBase, bio: "حساب اختباري - مشارك", bioAr: "حساب اختباري - مشارك" },
       });
 
-      summary.push(`Mishal accounts: mishal-admin@test.sa, mishal-judge@test.sa, mishal@test.sa`);
-
-      // Assign mishal-admin as ADMIN in elm-org (like org-admin@uqu.edu.sa)
+      // mishal-admin → ADMIN in elm-org
       const org = await tx.organization.findFirst({ where: { slug: "elm-org" } });
       if (org) {
         await tx.organizationMember.upsert({
@@ -110,15 +131,15 @@ export async function POST() {
           update: { role: "ADMIN" },
           create: { organizationId: org.id, userId: mishalAdmin.id, role: "ADMIN" },
         });
-        summary.push(`mishal-admin@test.sa → ADMIN in elm-org`);
       }
 
+      summary.push(`Mishal: mishal-admin@test.sa (org admin), mishal-judge@test.sa (judge), mishal@test.sa (participant)`);
+
       // ================================================================
-      // 4. Clean up existing test event data
+      // 5. Clean up target event data
       // ================================================================
       await tx.judgeAssignment.deleteMany({ where: { eventId } });
       await tx.eventScheduleItem.deleteMany({ where: { eventId } });
-
       const oldPhaseIds = (await tx.eventPhase.findMany({ where: { eventId }, select: { id: true } })).map(p => p.id);
       if (oldPhaseIds.length > 0) {
         await tx.phaseCriteria.deleteMany({ where: { phaseId: { in: oldPhaseIds } } });
@@ -130,362 +151,287 @@ export async function POST() {
       await tx.team.deleteMany({ where: { eventId } });
       await tx.eventTrack.deleteMany({ where: { eventId } });
       await tx.eventMember.deleteMany({ where: { eventId } });
-
-      summary.push("Old test event data cleaned up (tracks, phases, criteria, schedule, teams, members)");
+      summary.push("Target event data cleaned up");
 
       // ================================================================
-      // 5. Update event settings to match thakathon-2026
+      // 6. Copy event settings from source
       // ================================================================
-      const today = new Date();
-      const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const daysAgo = (n: number) => { const d = new Date(todayDate); d.setDate(d.getDate() - n); return d; };
-      const daysFromNow = (n: number) => { const d = new Date(todayDate); d.setDate(d.getDate() + n); return d; };
-
       await tx.event.update({
         where: { id: eventId },
         data: {
-          status: "IN_PROGRESS",
-          type: "HACKATHON",
-          category: "AI_ML",
-          visibility: "PUBLIC",
-          startDate: daysAgo(1),
-          endDate: daysFromNow(5),
-          registrationStart: daysAgo(10),
-          registrationEnd: daysAgo(1),
-          timezone: "Asia/Riyadh",
-          isOnline: false,
-          maxParticipants: 250,
-          registrationMode: "TEAM",
-          minTeamSize: 3,
-          maxTeamSize: 5,
-          allowIndividual: false,
-          requireApproval: true,
-          hasPhases: true,
-          hasElimination: true,
-          totalPhases: 5,
-          primaryColor: "#7C3AED",
-          secondaryColor: "#14B8A6",
-          aiEvaluationEnabled: true,
-          questionSource: "MANUAL",
-          publishedAt: daysAgo(10),
-          rules: "- حجم الفريق: 3-5 أعضاء\n- يجب وجود عضو تقني واحد على الأقل\n- يجب تقديم حل يعتمد على الذكاء الاصطناعي",
-          rulesAr: "- حجم الفريق: 3-5 أعضاء\n- يجب وجود عضو تقني واحد على الأقل\n- يجب تقديم حل يعتمد على الذكاء الاصطناعي",
-          prizes: JSON.stringify([
-            { rank: 1, label: "المركز الأول", description: "جائزة نقدية + شهادة + احتضان" },
-            { rank: 2, label: "المركز الثاني", description: "جائزة نقدية + شهادة" },
-            { rank: 3, label: "المركز الثالث", description: "جائزة نقدية + شهادة" },
-          ]),
+          status: source.status,
+          type: source.type,
+          category: source.category,
+          visibility: source.visibility,
+          startDate: source.startDate,
+          endDate: source.endDate,
+          registrationStart: source.registrationStart,
+          registrationEnd: source.registrationEnd,
+          timezone: source.timezone,
+          location: source.location,
+          locationAr: source.locationAr,
+          isOnline: source.isOnline,
+          maxParticipants: source.maxParticipants,
+          registrationMode: source.registrationMode,
+          minTeamSize: source.minTeamSize,
+          maxTeamSize: source.maxTeamSize,
+          allowIndividual: source.allowIndividual,
+          requireApproval: source.requireApproval,
+          hasPhases: source.hasPhases,
+          hasElimination: source.hasElimination,
+          totalPhases: source.totalPhases,
+          primaryColor: source.primaryColor,
+          secondaryColor: source.secondaryColor,
+          aiEvaluationEnabled: source.aiEvaluationEnabled,
+          questionSource: source.questionSource,
+          rules: source.rules,
+          rulesAr: source.rulesAr,
+          prizes: source.prizes as any,
         },
       });
-      summary.push("Event settings updated to match thakathon-2026");
+      summary.push("Event settings copied from source");
 
       // ================================================================
-      // 6. Tracks (5) — exact copy from thakathon-2026
+      // 7. Clone tracks
       // ================================================================
-      const trackData = [
-        { name: "Hajj & Umrah", nameAr: "الحج والعمرة", domain: "GENERAL" as const, color: "#D97706", description: "AI solutions for Hajj and Umrah services using Arabic NLP", descriptionAr: "حلول الذكاء الاصطناعي لخدمات الحج والعمرة باستخدام معالجة اللغة العربية" },
-        { name: "Tourism & Culture", nameAr: "السياحة والثقافة", domain: "TOURISM" as const, color: "#059669", description: "AI solutions for tourism and cultural experiences", descriptionAr: "حلول الذكاء الاصطناعي للسياحة والتجارب الثقافية" },
-        { name: "Law", nameAr: "القانون", domain: "LEGAL" as const, color: "#7C3AED", description: "AI solutions for legal services and Arabic legal text processing", descriptionAr: "حلول الذكاء الاصطناعي للخدمات القانونية ومعالجة النصوص القانونية العربية" },
-        { name: "Education", nameAr: "التعليم", domain: "EDUCATION" as const, color: "#2563EB", description: "AI solutions for education and Arabic learning", descriptionAr: "حلول الذكاء الاصطناعي للتعليم والتعلم بالعربية" },
-        { name: "Healthcare", nameAr: "الرعاية الصحية", domain: "HEALTH" as const, color: "#DC2626", description: "AI solutions for healthcare using Arabic NLP", descriptionAr: "حلول الذكاء الاصطناعي للرعاية الصحية باستخدام معالجة اللغة العربية" },
-      ];
-
-      const tracks: Record<string, any> = {};
-      for (let i = 0; i < trackData.length; i++) {
-        const t = await tx.eventTrack.create({
-          data: { eventId, ...trackData[i], maxTeams: 40, sortOrder: i + 1 },
+      const trackMap: Record<string, string> = {}; // srcId → newId
+      const tracksByName: Record<string, any> = {};
+      for (const t of srcTracks) {
+        const created = await tx.eventTrack.create({
+          data: {
+            eventId,
+            name: t.name, nameAr: t.nameAr,
+            description: t.description, descriptionAr: t.descriptionAr,
+            icon: t.icon, color: t.color,
+            domain: t.domain, maxTeams: t.maxTeams,
+            sortOrder: t.sortOrder, isActive: t.isActive,
+          },
         });
-        tracks[t.name] = t;
+        trackMap[t.id] = created.id;
+        tracksByName[t.name] = created;
       }
-      summary.push(`5 tracks created (matching thakathon-2026)`);
+      summary.push(`${srcTracks.length} tracks cloned`);
 
       // ================================================================
-      // 7. Phases (5) — exact copy from thakathon-2026
+      // 8. Clone phases
       // ================================================================
-      const phase1 = await tx.eventPhase.create({
-        data: {
-          eventId, name: "Registration & Acceptance", nameAr: "التسجيل والقبول",
-          descriptionAr: "تسجيل الفرق وتقديم الطلبات",
-          phaseNumber: 1, phaseType: "REGISTRATION", status: "COMPLETED",
-          startDate: daysAgo(10), endDate: daysAgo(2),
-        },
-      });
-
-      const phase2 = await tx.eventPhase.create({
-        data: {
-          eventId, name: "Idea Review", nameAr: "مراجعة الأفكار",
-          description: "Submit your project idea with a clear description",
-          descriptionAr: "قدّم فكرة مشروعك مع وصف واضح وخطة مبدئية",
-          phaseNumber: 2, phaseType: "IDEA_REVIEW", status: "ACTIVE",
-          startDate: daysAgo(1), endDate: daysFromNow(2),
-          deliverableConfig: {
-            fields: [
-              { type: "description", enabled: true, required: true, label: "وصف الفكرة" },
-              { type: "presentation", enabled: true, required: false, label: "عرض تقديمي مبدئي" },
-            ],
+      const phaseMap: Record<string, string> = {}; // srcId → newId
+      const phases: any[] = [];
+      for (const p of srcPhases) {
+        const created = await tx.eventPhase.create({
+          data: {
+            eventId,
+            name: p.name, nameAr: p.nameAr,
+            description: p.description, descriptionAr: p.descriptionAr,
+            phaseNumber: p.phaseNumber, phaseType: p.phaseType,
+            status: p.status,
+            startDate: p.startDate, endDate: p.endDate,
+            isElimination: p.isElimination,
+            passThreshold: p.passThreshold,
+            maxAdvancing: p.maxAdvancing,
+            advancePercent: p.advancePercent,
+            evaluationMethod: p.evaluationMethod,
+            advancementMode: p.advancementMode,
+            autoFilterRules: p.autoFilterRules as any,
+            deliverableConfig: p.deliverableConfig as any,
+            isActive: p.isActive,
           },
-        },
-      });
+        });
+        phaseMap[p.id] = created.id;
+        phases.push(created);
+      }
+      summary.push(`${srcPhases.length} phases cloned`);
 
-      const phase3 = await tx.eventPhase.create({
-        data: {
-          eventId, name: "Development", nameAr: "التطوير",
-          descriptionAr: "تطوير الحلول باستخدام تقنيات الذكاء الاصطناعي",
-          phaseNumber: 3, phaseType: "DEVELOPMENT", status: "UPCOMING",
-          startDate: daysFromNow(2), endDate: daysFromNow(4),
-          deliverableConfig: {
-            fields: [
-              { type: "description", enabled: true, required: true, label: "وصف المشروع" },
-              { type: "repository", enabled: true, required: true, label: "رابط الكود (GitHub)" },
-              { type: "demo", enabled: true, required: false, label: "رابط التجربة (Demo)" },
-            ],
+      // ================================================================
+      // 9. Clone evaluation criteria
+      // ================================================================
+      for (const c of srcCriteria) {
+        await tx.evaluationCriteria.create({
+          data: {
+            eventId,
+            name: c.name, nameAr: c.nameAr,
+            description: c.description, descriptionAr: c.descriptionAr,
+            weight: c.weight, maxScore: c.maxScore,
+            sortOrder: c.sortOrder, isActive: c.isActive,
           },
-        },
-      });
-
-      const phase4 = await tx.eventPhase.create({
-        data: {
-          eventId, name: "Presentation", nameAr: "العرض التقديمي",
-          descriptionAr: "تقديم العروض النهائية أمام لجنة التحكيم",
-          phaseNumber: 4, phaseType: "PRESENTATION", status: "UPCOMING",
-          startDate: daysFromNow(4), endDate: daysFromNow(5),
-        },
-      });
-
-      const phase5 = await tx.eventPhase.create({
-        data: {
-          eventId, name: "Final Judging", nameAr: "التحكيم النهائي",
-          descriptionAr: "إعلان الفائزين وحفل التكريم وتوزيع الجوائز",
-          phaseNumber: 5, phaseType: "JUDGING", status: "UPCOMING",
-          startDate: daysFromNow(5), endDate: daysFromNow(5),
-        },
-      });
-
-      summary.push(`5 phases created (matching thakathon-2026)`);
+        });
+      }
+      summary.push(`${srcCriteria.length} criteria cloned`);
 
       // ================================================================
-      // 8. Evaluation Criteria (6) — exact copy from thakathon-2026
+      // 10. Clone schedule items (remap phaseId)
       // ================================================================
-      await tx.evaluationCriteria.createMany({
-        data: [
-          { eventId, name: "Innovation & Creativity", nameAr: "الابتكار والإبداع", description: "Originality of the idea and creative approach", descriptionAr: "أصالة الفكرة والنهج الإبداعي في حل المشكلة", weight: 2.0, maxScore: 10, sortOrder: 1 },
-          { eventId, name: "Real-World Problem Solving", nameAr: "حل المشكلات الواقعية", description: "Addressing a real community need", descriptionAr: "معالجة حاجة مجتمعية حقيقية وتقديم حل عملي", weight: 1.5, maxScore: 10, sortOrder: 2 },
-          { eventId, name: "AI Implementation Quality", nameAr: "جودة تطبيق الذكاء الاصطناعي", description: "Quality of LLM, TTS, ASR implementation for Arabic", descriptionAr: "جودة تطبيق النماذج اللغوية الكبيرة وتحويل النص لكلام والتعرف على الكلام للعربية", weight: 2.0, maxScore: 10, sortOrder: 3 },
-          { eventId, name: "Feasibility & Scalability", nameAr: "الجدوى وقابلية التوسع", description: "Technical feasibility and potential for scaling", descriptionAr: "الجدوى التقنية وإمكانية التوسع والتطبيق على نطاق أوسع", weight: 1.5, maxScore: 10, sortOrder: 4 },
-          { eventId, name: "Presentation Quality", nameAr: "جودة العرض التقديمي", description: "Clarity and quality of the presentation", descriptionAr: "وضوح وجودة العرض التقديمي والتواصل الفعال للفكرة", weight: 1.0, maxScore: 10, sortOrder: 5 },
-          { eventId, name: "Expected Impact", nameAr: "الأثر المتوقع", description: "Potential community and social impact", descriptionAr: "الأثر المجتمعي والاجتماعي المتوقع من تطبيق الحل", weight: 1.0, maxScore: 10, sortOrder: 6 },
-        ],
-      });
-      summary.push(`6 evaluation criteria created (matching thakathon-2026)`);
+      for (const s of srcSchedule) {
+        await tx.eventScheduleItem.create({
+          data: {
+            eventId,
+            phaseId: s.phaseId ? phaseMap[s.phaseId] || null : null,
+            title: s.title, titleAr: s.titleAr,
+            description: s.description, descriptionAr: s.descriptionAr,
+            type: s.type, date: s.date,
+            startTime: s.startTime, endTime: s.endTime,
+            isOnline: s.isOnline, isInPerson: s.isInPerson,
+            onlineLink: s.onlineLink,
+            location: s.location, locationAr: s.locationAr,
+            speaker: s.speaker, speakerAr: s.speakerAr,
+            isPublished: s.isPublished, sortOrder: s.sortOrder,
+          },
+        });
+      }
+      summary.push(`${srcSchedule.length} schedule items cloned`);
 
       // ================================================================
-      // 9. Schedule Items (11) — exact copy from thakathon-2026
+      // 11. Event Members
       // ================================================================
-      const day1 = daysAgo(1);   // Day 1 of event
-      const day2 = todayDate;     // Day 2
-      const day3 = daysFromNow(1); // Day 3
-      const day4 = daysFromNow(2); // Day 4
-      const day5 = daysFromNow(4); // Presentation day
-
-      await tx.eventScheduleItem.createMany({
-        data: [
-          // Day 1
-          { eventId, phaseId: phase1.id, title: "Opening Ceremony", titleAr: "حفل الافتتاح والتعارف", type: "CEREMONY", date: day1, startTime: "09:00", endTime: "09:30", isInPerson: true, location: "Main Hall", locationAr: "القاعة الرئيسية", sortOrder: 1 },
-          { eventId, phaseId: phase2.id, title: "AI Design Thinking Workshop", titleAr: "ورشة التفكير التصميمي بالذكاء الاصطناعي", type: "WORKSHOP", date: day1, startTime: "10:00", endTime: "12:00", isOnline: true, onlineLink: "https://zoom.us/j/workshop-1", speaker: "Dr. Ahmed", speakerAr: "د. أحمد الحربي", sortOrder: 2 },
-          { eventId, phaseId: phase2.id, title: "Mentoring Session", titleAr: "جلسة إرشاد مع الموجهين", type: "MENTORING", date: day1, startTime: "14:00", endTime: "15:30", isOnline: true, isInPerson: true, location: "Mentoring Room", locationAr: "قاعة الإرشاد", sortOrder: 3 },
-          { eventId, phaseId: phase2.id, title: "Initial Idea Submission Deadline", titleAr: "آخر موعد لتسليم وصف الفكرة المبدئي", type: "DEADLINE", date: day1, startTime: "23:59", sortOrder: 4 },
-          // Day 2
-          { eventId, phaseId: phase2.id, title: "UI/UX Design Workshop", titleAr: "ورشة تصميم واجهات المستخدم", type: "WORKSHOP", date: day2, startTime: "10:00", endTime: "12:00", isInPerson: true, location: "Design Lab", locationAr: "معمل التصميم", speaker: "Sara Almutairi", speakerAr: "سارة المطيري", sortOrder: 1 },
-          { eventId, phaseId: phase2.id, title: "Q&A with Judges Panel", titleAr: "جلسة أسئلة وأجوبة مع لجنة التحكيم", type: "SESSION", date: day2, startTime: "14:00", endTime: "15:00", isOnline: true, sortOrder: 2 },
-          { eventId, phaseId: phase3.id, title: "Prototyping Workshop", titleAr: "ورشة بناء النماذج الأولية", type: "WORKSHOP", date: day2, startTime: "16:00", endTime: "17:30", isOnline: true, speaker: "Khalid", speakerAr: "خالد الزهراني", sortOrder: 3 },
-          // Day 3
-          { eventId, phaseId: phase3.id, title: "Effective Project Presentation Workshop", titleAr: "ورشة عرض المشاريع بفعالية", type: "WORKSHOP", date: day3, startTime: "10:00", endTime: "12:00", isOnline: true, sortOrder: 1 },
-          { eventId, phaseId: phase3.id, title: "Final Project Submission Deadline", titleAr: "آخر موعد لتسليم المشروع النهائي", type: "DEADLINE", date: day3, startTime: "18:00", sortOrder: 2 },
-          // Presentation Day
-          { eventId, phaseId: phase4.id, title: "Team Presentations", titleAr: "العروض التقديمية للفرق", type: "PRESENTATION", date: day5, startTime: "10:00", endTime: "12:00", isInPerson: true, location: "Main Hall", locationAr: "القاعة الرئيسية", sortOrder: 1 },
-          { eventId, phaseId: phase5.id, title: "Closing Ceremony & Results", titleAr: "حفل الختام وإعلان النتائج", type: "CEREMONY", date: day5, startTime: "14:00", endTime: "16:00", isInPerson: true, location: "Main Hall", locationAr: "القاعة الرئيسية", sortOrder: 2 },
-        ],
-      });
-      summary.push(`11 schedule items created (matching thakathon-2026)`);
-
-      // ================================================================
-      // 10. Event Members
-      // ================================================================
-      const allParticipants = [mainUser, ahmad, sara, khalid];
       const staffMembers = [
         { userId: eventMgr.id, role: "ORGANIZER" as const },
         { userId: judgeUser.id, role: "JUDGE" as const },
         { userId: mentorUser.id, role: "MENTOR" as const },
       ];
-
       for (const staff of staffMembers) {
         await tx.eventMember.create({
           data: { eventId, ...staff, status: "APPROVED", approvedAt: new Date() },
         });
       }
-
-      for (const participant of allParticipants) {
+      for (const user of [mainUser, ahmad, sara, khalid]) {
         await tx.eventMember.create({
-          data: { eventId, userId: participant.id, role: "PARTICIPANT", status: "APPROVED", approvedAt: new Date() },
+          data: { eventId, userId: user.id, role: "PARTICIPANT", status: "APPROVED", approvedAt: new Date() },
         });
       }
-      summary.push(`7 event members created (1 organizer, 1 judge, 1 mentor, 4 participants)`);
-
-      // mishal-judge as JUDGE (like judge@elm.sa)
+      // mishal-judge → JUDGE, mishal@test.sa → PARTICIPANT
       await tx.eventMember.create({
         data: { eventId, userId: mishalJudge.id, role: "JUDGE", status: "APPROVED", approvedAt: new Date() },
       });
-      // mishal@test.sa as PARTICIPANT (like radhyah@uqu.edu.sa)
       await tx.eventMember.create({
         data: { eventId, userId: mishalParticipant.id, role: "PARTICIPANT", status: "APPROVED", approvedAt: new Date() },
       });
-      summary.push(`mishal-judge → JUDGE, mishal@test.sa → PARTICIPANT`);
+      summary.push(`9 event members created`);
 
       // ================================================================
-      // 11. Teams (4)
+      // 12. Teams (4) — using first 4 tracks from source
       // ================================================================
-      const hajjTrack = tracks["Hajj & Umrah"];
-      const eduTrack = tracks["Education"];
-      const lawTrack = tracks["Law"];
-      const tourismTrack = tracks["Tourism & Culture"];
+      const trackNames = srcTracks.map(t => t.name);
+      const getTrack = (name: string) => tracksByName[name];
 
-      // Team 1: الرواد — Hajj track — led by radhyah
       const team1 = await tx.team.create({
         data: {
-          eventId, trackId: hajjTrack.id,
+          eventId, trackId: getTrack(trackNames[0]).id,
           name: "Pioneers", nameAr: "الرواد", status: "ACTIVE",
           projectTitle: "Smart Hajj Guide", projectTitleAr: "المرشد الذكي للحج",
         },
       });
-      await tx.teamMember.create({ data: { teamId: team1.id, userId: mainUser.id, role: "LEADER" } });
-      await tx.teamMember.create({ data: { teamId: team1.id, userId: ahmad.id, role: "MEMBER" } });
-      await tx.teamMember.create({ data: { teamId: team1.id, userId: sara.id, role: "MEMBER" } });
-      await tx.teamMember.create({ data: { teamId: team1.id, userId: khalid.id, role: "MEMBER" } });
+      await tx.teamMember.createMany({ data: [
+        { teamId: team1.id, userId: mainUser.id, role: "LEADER" },
+        { teamId: team1.id, userId: ahmad.id, role: "MEMBER" },
+        { teamId: team1.id, userId: sara.id, role: "MEMBER" },
+        { teamId: team1.id, userId: khalid.id, role: "MEMBER" },
+      ]});
 
-      // Team 2: المبتكرات — Education track — led by sara
       const team2 = await tx.team.create({
         data: {
-          eventId, trackId: eduTrack.id,
+          eventId, trackId: getTrack(trackNames[3]).id,
           name: "Innovators", nameAr: "المبتكرات", status: "ACTIVE",
           projectTitle: "Arabic NLP Tutor", projectTitleAr: "المعلم الذكي للعربية",
         },
       });
-      await tx.teamMember.create({ data: { teamId: team2.id, userId: sara.id, role: "LEADER" } });
-      await tx.teamMember.create({ data: { teamId: team2.id, userId: ahmad.id, role: "MEMBER" } });
-      await tx.teamMember.create({ data: { teamId: team2.id, userId: khalid.id, role: "MEMBER" } });
+      await tx.teamMember.createMany({ data: [
+        { teamId: team2.id, userId: sara.id, role: "LEADER" },
+        { teamId: team2.id, userId: ahmad.id, role: "MEMBER" },
+        { teamId: team2.id, userId: khalid.id, role: "MEMBER" },
+      ]});
 
-      // Team 3: التقنيات القانونية — Law track — led by khalid
       const team3 = await tx.team.create({
         data: {
-          eventId, trackId: lawTrack.id,
+          eventId, trackId: getTrack(trackNames[2]).id,
           name: "TechLaw", nameAr: "التقنيات القانونية", status: "ACTIVE",
           projectTitle: "Legal AI Assistant", projectTitleAr: "المساعد القانوني الذكي",
         },
       });
-      await tx.teamMember.create({ data: { teamId: team3.id, userId: khalid.id, role: "LEADER" } });
-      await tx.teamMember.create({ data: { teamId: team3.id, userId: ahmad.id, role: "MEMBER" } });
-      await tx.teamMember.create({ data: { teamId: team3.id, userId: sara.id, role: "MEMBER" } });
+      await tx.teamMember.createMany({ data: [
+        { teamId: team3.id, userId: khalid.id, role: "LEADER" },
+        { teamId: team3.id, userId: ahmad.id, role: "MEMBER" },
+        { teamId: team3.id, userId: sara.id, role: "MEMBER" },
+      ]});
 
-      // Team 4: فريق الإبداع — Tourism track — led by mishal@test.sa (participant)
       const team4 = await tx.team.create({
         data: {
-          eventId, trackId: tourismTrack.id,
+          eventId, trackId: getTrack(trackNames[1]).id,
           name: "MishalTeam", nameAr: "فريق الإبداع", status: "ACTIVE",
           projectTitle: "Smart Tourism Guide", projectTitleAr: "المرشد السياحي الذكي",
         },
       });
-      await tx.teamMember.create({ data: { teamId: team4.id, userId: mishalParticipant.id, role: "LEADER" } });
-      await tx.teamMember.create({ data: { teamId: team4.id, userId: ahmad.id, role: "MEMBER" } });
+      await tx.teamMember.createMany({ data: [
+        { teamId: team4.id, userId: mishalParticipant.id, role: "LEADER" },
+        { teamId: team4.id, userId: ahmad.id, role: "MEMBER" },
+      ]});
 
-      summary.push(`4 teams created: الرواد, المبتكرات, التقنيات القانونية, فريق الإبداع`);
+      summary.push(`4 teams created`);
 
       // ================================================================
-      // 12. Judge Assignments
+      // 13. Judge Assignments — use phase 2 (first ACTIVE/IDEA_REVIEW)
       // ================================================================
+      const activePhase = phases.find(p => p.status === "ACTIVE") || phases[1];
+
       const judgeMember = await tx.eventMember.findFirst({
         where: { eventId, userId: judgeUser.id, role: "JUDGE" },
       });
-
-      if (judgeMember) {
+      if (judgeMember && activePhase) {
         await tx.judgeAssignment.create({
-          data: { eventId, phaseId: phase2.id, judgeId: judgeMember.id, teamId: team1.id, trackId: hajjTrack.id, status: "PENDING" },
+          data: { eventId, phaseId: activePhase.id, judgeId: judgeMember.id, teamId: team1.id, trackId: getTrack(trackNames[0]).id, status: "PENDING" },
         });
         await tx.judgeAssignment.create({
-          data: { eventId, phaseId: phase2.id, judgeId: judgeMember.id, teamId: team2.id, trackId: eduTrack.id, status: "PENDING" },
+          data: { eventId, phaseId: activePhase.id, judgeId: judgeMember.id, teamId: team2.id, trackId: getTrack(trackNames[3]).id, status: "PENDING" },
         });
-        summary.push(`Judge (judge@elm.sa) → الرواد + المبتكرات`);
+        summary.push(`judge@elm.sa → ${team1.nameAr} + ${team2.nameAr}`);
       }
 
-      // mishal-judge assignments (like judge@elm.sa)
-      const mishalJudgeMember = await tx.eventMember.findFirst({
+      const mjMember = await tx.eventMember.findFirst({
         where: { eventId, userId: mishalJudge.id, role: "JUDGE" },
       });
-
-      if (mishalJudgeMember) {
+      if (mjMember && activePhase) {
         await tx.judgeAssignment.create({
-          data: { eventId, phaseId: phase2.id, judgeId: mishalJudgeMember.id, teamId: team3.id, trackId: lawTrack.id, status: "PENDING" },
+          data: { eventId, phaseId: activePhase.id, judgeId: mjMember.id, teamId: team3.id, trackId: getTrack(trackNames[2]).id, status: "PENDING" },
         });
         await tx.judgeAssignment.create({
-          data: { eventId, phaseId: phase2.id, judgeId: mishalJudgeMember.id, teamId: team1.id, trackId: hajjTrack.id, status: "PENDING" },
+          data: { eventId, phaseId: activePhase.id, judgeId: mjMember.id, teamId: team1.id, trackId: getTrack(trackNames[0]).id, status: "PENDING" },
         });
-        summary.push(`mishal-judge → التقنيات القانونية + الرواد`);
+        summary.push(`mishal-judge@test.sa → ${team3.nameAr} + ${team1.nameAr}`);
       }
 
       // ================================================================
-      // 13. Clean up the separate thakathon-test event if it exists
+      // 14. Cleanup extra thakathon-test if exists
       // ================================================================
-      const extraEvent = await tx.event.findUnique({ where: { slug: "thakathon-test" } });
-      if (extraEvent) {
-        await tx.judgeAssignment.deleteMany({ where: { eventId: extraEvent.id } });
-        await tx.eventScheduleItem.deleteMany({ where: { eventId: extraEvent.id } });
-        const extraPhaseIds = (await tx.eventPhase.findMany({ where: { eventId: extraEvent.id }, select: { id: true } })).map(p => p.id);
-        if (extraPhaseIds.length > 0) {
-          await tx.phaseCriteria.deleteMany({ where: { phaseId: { in: extraPhaseIds } } });
-          await tx.phaseResult.deleteMany({ where: { phaseId: { in: extraPhaseIds } } });
+      const extra = await tx.event.findUnique({ where: { slug: "thakathon-test" } });
+      if (extra) {
+        await tx.judgeAssignment.deleteMany({ where: { eventId: extra.id } });
+        await tx.eventScheduleItem.deleteMany({ where: { eventId: extra.id } });
+        const epIds = (await tx.eventPhase.findMany({ where: { eventId: extra.id }, select: { id: true } })).map(p => p.id);
+        if (epIds.length > 0) {
+          await tx.phaseCriteria.deleteMany({ where: { phaseId: { in: epIds } } });
+          await tx.phaseResult.deleteMany({ where: { phaseId: { in: epIds } } });
         }
-        await tx.eventPhase.deleteMany({ where: { eventId: extraEvent.id } });
-        await tx.evaluationCriteria.deleteMany({ where: { eventId: extraEvent.id } });
-        await tx.teamMember.deleteMany({ where: { team: { eventId: extraEvent.id } } });
-        await tx.team.deleteMany({ where: { eventId: extraEvent.id } });
-        await tx.eventTrack.deleteMany({ where: { eventId: extraEvent.id } });
-        await tx.eventMember.deleteMany({ where: { eventId: extraEvent.id } });
-        await tx.event.delete({ where: { id: extraEvent.id } });
+        await tx.eventPhase.deleteMany({ where: { eventId: extra.id } });
+        await tx.evaluationCriteria.deleteMany({ where: { eventId: extra.id } });
+        await tx.teamMember.deleteMany({ where: { team: { eventId: extra.id } } });
+        await tx.team.deleteMany({ where: { eventId: extra.id } });
+        await tx.eventTrack.deleteMany({ where: { eventId: extra.id } });
+        await tx.eventMember.deleteMany({ where: { eventId: extra.id } });
+        await tx.event.delete({ where: { id: extra.id } });
         summary.push("Deleted extra thakathon-test event");
       }
 
-      // ================================================================
-      // Summary
-      // ================================================================
-      summary.push(`--- حسابات مشعل الزامل (Test@123) ---`);
-      summary.push(`  mishal-admin@test.sa → مدير مؤسسة (ADMIN في elm-org) → /organization/events`);
-      summary.push(`  mishal-judge@test.sa → محكم (JUDGE + فريقين معينين) → /judge`);
-      summary.push(`  mishal@test.sa → مشارك (PARTICIPANT + قائد فريق "الإبداع") → /team + /my-events`);
+      summary.push(`--- حسابات مشعل (Test@123) ---`);
+      summary.push(`  mishal-admin@test.sa → مدير مؤسسة`);
+      summary.push(`  mishal-judge@test.sa → محكم`);
+      summary.push(`  mishal@test.sa → مشارك`);
 
-      return {
-        eventId,
-        eventSlug: testEvent.slug,
-        tracks: Object.keys(tracks).length,
-        teams: 4,
-        judgeAssignments: 4,
-        mishalAccounts: {
-          admin: mishalAdmin.id,
-          judge: mishalJudge.id,
-          participant: mishalParticipant.id,
-        },
-        summary,
-      };
+      return { eventId, eventSlug: target.slug, clonedFrom: source.slug, tracks: srcTracks.length, phases: srcPhases.length, criteria: srcCriteria.length, scheduleItems: srcSchedule.length, teams: 4, summary };
     });
 
-    return NextResponse.json(
-      { success: true, message: "Test event updated successfully", data: result },
-      { status: 201 }
-    );
+    return NextResponse.json({ success: true, message: "Test event cloned successfully", data: result }, { status: 201 });
   } catch (error: unknown) {
     console.error("Seed test event error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json(
-      { success: false, error: "Failed to seed test event", details: message },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: "Failed to seed test event", details: message }, { status: 500 });
   }
 }
