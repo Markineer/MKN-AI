@@ -69,6 +69,46 @@ export async function GET(
 
   const meta = (submission?.metadata as any) || {};
 
+  // Fetch EventTools for this event+phase
+  const now = new Date();
+  const eventTools = await prisma.eventTool.findMany({
+    where: {
+      eventId: team.eventId,
+      isActive: true,
+      OR: [{ phaseId }, { phaseId: null }],
+    },
+    include: {
+      entries: { where: { teamId } },
+      phase: { select: { id: true, nameAr: true, name: true } },
+    },
+    orderBy: { sortOrder: "asc" },
+  });
+
+  const tools = eventTools
+    .filter((t) => !t.opensAt || t.opensAt <= now)
+    .map((t) => ({
+      id: t.id,
+      nameAr: t.nameAr,
+      name: t.name,
+      descriptionAr: t.descriptionAr,
+      toolType: t.toolType,
+      provider: t.provider,
+      icon: t.icon,
+      externalUrl: t.externalUrl,
+      closesAt: t.closesAt,
+      isLocked: t.closesAt ? t.closesAt < now : false,
+      phaseId: t.phaseId,
+      phaseName: t.phase?.nameAr || t.phase?.name || null,
+      entry: t.entries[0]
+        ? {
+            id: t.entries[0].id,
+            status: t.entries[0].status,
+            generatedUrl: t.entries[0].generatedUrl,
+            submittedUrl: t.entries[0].submittedUrl,
+          }
+        : null,
+    }));
+
   return NextResponse.json({
     team: {
       id: team.id,
@@ -99,6 +139,7 @@ export async function GET(
       status: submission.status,
       submittedAt: submission.submittedAt,
     } : null,
+    tools,
   });
 }
 

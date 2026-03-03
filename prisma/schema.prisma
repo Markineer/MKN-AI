@@ -475,6 +475,7 @@ model Event {
   judgeInvitations JudgeInvitation[]
   scheduleItems    EventScheduleItem[]
   teamEditRequests TeamEditRequest[]
+  tools            EventTool[]
 
   @@map("events")
 }
@@ -536,6 +537,7 @@ model EventPhase {
   results  PhaseResult[]
   assignments JudgeAssignment[]
   scheduleItems EventScheduleItem[]
+  tools         EventTool[]
 
   @@unique([eventId, phaseNumber])
   @@map("event_phases")
@@ -810,6 +812,7 @@ model Team {
   evaluations Evaluation[]
   judgeAssignments JudgeAssignment[]
   editRequests     TeamEditRequest[]
+  toolEntries      TeamToolEntry[]
 
   @@unique([eventId, name])
   @@map("teams")
@@ -1416,4 +1419,80 @@ model TeamEditRequest {
   @@index([teamId, status])
   @@index([eventId, status])
   @@map("team_edit_requests")
+}
+
+// ============================================================================
+// 17. EVENT TOOLS - أدوات الفعالية
+// ============================================================================
+
+enum ToolType {
+  TEMPLATE
+  LINK_SUBMISSION
+  EXTERNAL_LINK
+}
+
+enum ToolProvider {
+  MIRO
+  GOOGLE_SLIDES
+  GOOGLE_DOCS
+  GITHUB
+  GITHUB_PAGES
+  GOOGLE_MAPS
+  CUSTOM
+}
+
+enum ToolEntryStatus {
+  PENDING
+  GENERATED
+  SUBMITTED
+  FAILED
+}
+
+model EventTool {
+  id              String       @id @default(cuid())
+  eventId         String       @map("event_id")
+  phaseId         String?      @map("phase_id")
+  name            String
+  nameAr          String       @map("name_ar")
+  description     String?
+  descriptionAr   String?      @map("description_ar")
+  toolType        ToolType     @map("tool_type")
+  provider        ToolProvider
+  icon            String?
+  templateUrl     String?      @map("template_url")
+  apiToken        String?      @map("api_token")
+  externalUrl     String?      @map("external_url")
+  opensAt         DateTime?    @map("opens_at")
+  closesAt        DateTime?    @map("closes_at")
+  isActive        Boolean      @default(true) @map("is_active")
+  sortOrder       Int          @default(0) @map("sort_order")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  event   Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  phase   EventPhase?  @relation(fields: [phaseId], references: [id])
+  entries TeamToolEntry[]
+
+  @@index([eventId])
+  @@map("event_tools")
+}
+
+model TeamToolEntry {
+  id            String          @id @default(cuid())
+  eventToolId   String          @map("event_tool_id")
+  teamId        String          @map("team_id")
+  generatedUrl  String?         @map("generated_url")
+  submittedUrl  String?         @map("submitted_url")
+  status        ToolEntryStatus @default(PENDING)
+  errorMessage  String?         @map("error_message")
+  generatedAt   DateTime?       @map("generated_at")
+  submittedAt   DateTime?       @map("submitted_at")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  eventTool EventTool @relation(fields: [eventToolId], references: [id], onDelete: Cascade)
+  team      Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([eventToolId, teamId])
+  @@map("team_tool_entries")
 }

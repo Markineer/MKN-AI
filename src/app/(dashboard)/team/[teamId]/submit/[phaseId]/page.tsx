@@ -18,6 +18,10 @@ import {
   Link2,
   Clock,
   CheckCircle,
+  Wrench,
+  Lock,
+  Map,
+  Puzzle,
 } from "lucide-react";
 
 interface FieldConfig {
@@ -58,6 +62,37 @@ const fieldIcons: Record<string, any> = {
   description: FileText,
 };
 
+interface ToolData {
+  id: string;
+  nameAr: string;
+  name: string;
+  descriptionAr: string | null;
+  toolType: string;
+  provider: string;
+  icon: string | null;
+  externalUrl: string | null;
+  closesAt: string | null;
+  isLocked: boolean;
+  phaseId: string | null;
+  phaseName: string | null;
+  entry: {
+    id: string;
+    status: string;
+    generatedUrl: string | null;
+    submittedUrl: string | null;
+  } | null;
+}
+
+const TOOL_ICONS: Record<string, any> = {
+  MIRO: Layers,
+  GOOGLE_SLIDES: FileText,
+  GOOGLE_DOCS: FileText,
+  GITHUB: GitBranch,
+  GITHUB_PAGES: Globe,
+  GOOGLE_MAPS: Map,
+  CUSTOM: Puzzle,
+};
+
 export default function TeamSubmitPage() {
   const params = useParams();
   const router = useRouter();
@@ -72,6 +107,8 @@ export default function TeamSubmitPage() {
   const [phase, setPhase] = useState<PhaseInfo | null>(null);
   const [team, setTeam] = useState<TeamInfo | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
+  const [tools, setTools] = useState<ToolData[]>([]);
+  const [toolValues, setToolValues] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const fetchData = async () => {
@@ -121,6 +158,18 @@ export default function TeamSubmitPage() {
           }
         }
         setValues(initial);
+
+        // Load tools
+        if (data.tools) {
+          setTools(data.tools);
+          const toolInit: Record<string, string> = {};
+          for (const tool of data.tools) {
+            if (tool.toolType === "LINK_SUBMISSION" && tool.entry?.submittedUrl) {
+              toolInit[tool.id] = tool.entry.submittedUrl;
+            }
+          }
+          setToolValues(toolInit);
+        }
       } catch (err) {
         setError("حدث خطأ في تحميل البيانات");
       } finally {
@@ -136,7 +185,8 @@ export default function TeamSubmitPage() {
     setSaved(false);
 
     try {
-      const res = await fetch(`/api/teams/${teamId}/deliverables/${phaseId}`, {
+      // Save deliverables
+      const deliverablePromise = fetch(`/api/teams/${teamId}/deliverables/${phaseId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -150,8 +200,21 @@ export default function TeamSubmitPage() {
         }),
       });
 
-      if (!res.ok) {
-        const data = await res.json();
+      // Save tool submissions in parallel
+      const toolPromises = tools
+        .filter((t) => t.toolType === "LINK_SUBMISSION" && !t.isLocked && toolValues[t.id])
+        .map((t) =>
+          fetch(`/api/teams/${teamId}/tools/${t.id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: toolValues[t.id] }),
+          })
+        );
+
+      const [deliverableRes] = await Promise.all([deliverablePromise, ...toolPromises]);
+
+      if (!deliverableRes.ok) {
+        const data = await deliverableRes.json();
         setError(data.error || "فشل الحفظ");
         return;
       }
@@ -311,6 +374,108 @@ export default function TeamSubmitPage() {
                 </div>
               );
             })}
+
+            {/* Tools Section */}
+            {tools.length > 0 && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-cyan-50 flex items-center justify-center">
+                    <Wrench className="w-4 h-4 text-cyan-600" />
+                  </div>
+                  <h3 className="text-sm font-bold text-elm-navy">الأدوات</h3>
+                </div>
+                <div className="space-y-3">
+                  {tools.map((tool) => {
+                    const ToolIcon = TOOL_ICONS[tool.provider] || Puzzle;
+
+                    if (tool.toolType === "TEMPLATE") {
+                      const url = tool.entry?.generatedUrl;
+                      return (
+                        <div key={tool.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                          <div className="flex items-center gap-3">
+                            <ToolIcon className="w-4 h-4 text-brand-500" />
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{tool.nameAr}</p>
+                              {tool.descriptionAr && <p className="text-[10px] text-gray-500">{tool.descriptionAr}</p>}
+                            </div>
+                          </div>
+                          {url ? (
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-500 text-white rounded-lg text-xs font-medium hover:bg-brand-600 transition-colors"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              فتح
+                            </a>
+                          ) : (
+                            <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              بانتظار الإعداد
+                            </span>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    if (tool.toolType === "EXTERNAL_LINK") {
+                      return (
+                        <div key={tool.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                          <div className="flex items-center gap-3">
+                            <ToolIcon className="w-4 h-4 text-brand-500" />
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{tool.nameAr}</p>
+                              {tool.descriptionAr && <p className="text-[10px] text-gray-500">{tool.descriptionAr}</p>}
+                            </div>
+                          </div>
+                          {tool.externalUrl && (
+                            <a
+                              href={tool.externalUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-600 text-white rounded-lg text-xs font-medium hover:bg-gray-700 transition-colors"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              فتح
+                            </a>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    // LINK_SUBMISSION
+                    return (
+                      <div key={tool.id} className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                        <div className="flex items-center gap-3 mb-2">
+                          <ToolIcon className="w-4 h-4 text-brand-500" />
+                          <p className="text-sm font-medium text-gray-900">{tool.nameAr}</p>
+                          {tool.isLocked && (
+                            <span className="flex items-center gap-1 text-[10px] text-red-500">
+                              <Lock className="w-3 h-3" />
+                              مقفل
+                            </span>
+                          )}
+                        </div>
+                        <input
+                          type="url"
+                          value={toolValues[tool.id] || ""}
+                          onChange={(e) => setToolValues({ ...toolValues, [tool.id]: e.target.value })}
+                          disabled={tool.isLocked}
+                          placeholder={
+                            tool.provider === "GITHUB" ? "https://github.com/username/repo" :
+                            tool.provider === "GITHUB_PAGES" ? "https://username.github.io/repo" :
+                            "https://..."
+                          }
+                          className="w-full px-4 py-2.5 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
+                          dir="ltr"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Submit Button */}
             <button

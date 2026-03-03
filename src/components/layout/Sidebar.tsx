@@ -24,6 +24,7 @@ import {
   Gavel,
   UserCircle,
   PlusCircle,
+  Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -56,6 +57,12 @@ const adminNavigation = [
       { nameAr: "جميع الفعاليات", href: "/organization/events", icon: Calendar },
       { nameAr: "الهاكاثونات", href: "/organization/events?type=HACKATHON", icon: Trophy },
       { nameAr: "التحديات", href: "/organization/events?type=CHALLENGE", icon: BookOpen },
+    ],
+  },
+  {
+    title: "الأدوات",
+    items: [
+      { nameAr: "إدارة الأدوات", href: "/admin/tools", icon: Wrench },
     ],
   },
   {

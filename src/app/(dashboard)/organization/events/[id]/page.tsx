@@ -33,6 +33,7 @@ import {
   TrendingUp,
   Shield,
   BarChart3,
+  Wrench,
 } from "lucide-react";
 
 interface EventDetail {
@@ -339,6 +340,7 @@ export default function EventDetailPage() {
     { href: `/event/${event.id}/mentors`, label: "المرشدين", icon: GraduationCap, count: event.members.filter(m => m.role === "MENTOR").length, color: "text-teal-500", bg: "bg-teal-50" },
     { href: `/event/${event.id}/submissions`, label: "التقديمات", icon: FileText, count: event._count.submissions, color: "text-indigo-500", bg: "bg-indigo-50" },
     { href: `/event/${event.id}/certificates`, label: "الشهادات", icon: Award, count: event._count.certificates, color: "text-yellow-600", bg: "bg-yellow-50" },
+    { href: `/event/${event.id}/tools`, label: "الأدوات", icon: Wrench, count: null, color: "text-cyan-500", bg: "bg-cyan-50" },
     { href: `/event/${event.id}/settings`, label: "الإعدادات", icon: Settings, count: null, color: "text-gray-500", bg: "bg-gray-50" },
   ];
 
