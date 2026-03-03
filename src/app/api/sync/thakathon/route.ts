@@ -82,6 +82,22 @@ export async function GET() {
       where: { name: "participant" },
     });
 
+    // Get all teams/users that have approved edit requests — skip overwriting their data
+    const approvedRequests = await prisma.teamEditRequest.findMany({
+      where: { eventId: event.id, status: "APPROVED" },
+      select: { teamId: true, proposedData: true },
+    });
+    const editedTeamIds = new Set(approvedRequests.map((r) => r.teamId));
+    const editedUserIds = new Set<string>();
+    for (const req of approvedRequests) {
+      const proposed = req.proposedData as any;
+      if (proposed?.members) {
+        for (const m of proposed.members) {
+          if (m.userId) editedUserIds.add(m.userId);
+        }
+      }
+    }
+
     let synced = 0;
     let usersCreated = 0;
     let membersLinked = 0;
@@ -100,12 +116,20 @@ export async function GET() {
         "FORMING" as const;
 
       // Upsert team (unique by eventId + name)
+      // Check if this team exists and has been edited
+      const existingTeam = await prisma.team.findUnique({
+        where: { eventId_name: { eventId: event.id, name: apiTeam.team_code } },
+        select: { id: true },
+      });
+      const isTeamEdited = existingTeam && editedTeamIds.has(existingTeam.id);
+
       const team = await prisma.team.upsert({
         where: {
           eventId_name: { eventId: event.id, name: apiTeam.team_code },
         },
         update: {
-          nameAr: apiTeam.team_name,
+          // Skip nameAr if team has approved edit request
+          ...(isTeamEdited ? {} : { nameAr: apiTeam.team_name }),
           trackId: track?.id || null,
           status: teamStatus,
           description: `${apiTeam.team_code} | Track: ${apiTeam.track} | Members: ${apiTeam.member_count} | Registered: ${apiTeam.registered_at}`,
@@ -162,16 +186,25 @@ export async function GET() {
           }
         }
 
-        // Upsert user with personal email
+        // Check if this user has been edited by an approved edit request
+        const existingUser = await prisma.user.findUnique({
+          where: { email },
+          select: { id: true },
+        });
+        const isUserEdited = existingUser && editedUserIds.has(existingUser.id);
+
+        // Upsert user with personal email — skip overwriting if edited
         const user = await prisma.user.upsert({
           where: { email },
-          update: {
-            firstNameAr,
-            lastNameAr,
-            bio: bioLines,
-            bioAr: bioLines,
-            nationalId: safeNationalId,
-          },
+          update: isUserEdited
+            ? {} // Don't overwrite edited user data
+            : {
+                firstNameAr,
+                lastNameAr,
+                bio: bioLines,
+                bioAr: bioLines,
+                nationalId: safeNationalId,
+              },
           create: {
             email,
             password: defaultPassword,
