@@ -34,6 +34,8 @@ import {
   Shield,
   BarChart3,
   Wrench,
+  FileEdit,
+  BadgeCheck,
 } from "lucide-react";
 
 interface EventDetail {
@@ -328,20 +330,49 @@ export default function EventDetailPage() {
   const daysRemaining = getDaysRemaining(event.endDate);
   const status = statusConfig[event.status] || statusConfig.DRAFT;
 
-  const managementLinks = [
-    { href: `/event/${event.id}/participants`, label: "المشاركين", icon: Users, count: event._count.members, color: "text-blue-500", bg: "bg-blue-50" },
-    { href: `/event/${event.id}/teams`, label: "الفرق", icon: Users, count: event._count.teams, color: "text-emerald-500", bg: "bg-emerald-50" },
-    { href: `/event/${event.id}/tracks`, label: "المسارات", icon: Layers, count: event.tracks.length, color: "text-purple-500", bg: "bg-purple-50" },
-    { href: `/event/${event.id}/phases`, label: "المراحل", icon: Clock, count: event.phases.length, color: "text-amber-500", bg: "bg-amber-50" },
-    { href: `/event/${event.id}/questions`, label: "الأسئلة", icon: FileText, count: event.challenges.reduce((a, c) => a + c.questions.length, 0), color: "text-orange-500", bg: "bg-orange-50" },
-    { href: `/event/${event.id}/criteria`, label: "معايير التقييم", icon: Target, count: event.evaluationCriteria.length, color: "text-pink-500", bg: "bg-pink-50" },
-    { href: `/event/${event.id}/judges`, label: "المحكمين", icon: Scale, count: judges.length, color: "text-brand-500", bg: "bg-brand-50" },
-    { href: `/event/${event.id}/evaluations`, label: "نتائج التقييمات", icon: BarChart3, count: null, color: "text-rose-500", bg: "bg-rose-50" },
-    { href: `/event/${event.id}/mentors`, label: "المرشدين", icon: GraduationCap, count: event.members.filter(m => m.role === "MENTOR").length, color: "text-teal-500", bg: "bg-teal-50" },
-    { href: `/event/${event.id}/submissions`, label: "التقديمات", icon: FileText, count: event._count.submissions, color: "text-indigo-500", bg: "bg-indigo-50" },
-    { href: `/event/${event.id}/certificates`, label: "الشهادات", icon: Award, count: event._count.certificates, color: "text-yellow-600", bg: "bg-yellow-50" },
-    { href: `/event/${event.id}/tools`, label: "الأدوات", icon: Wrench, count: null, color: "text-cyan-500", bg: "bg-cyan-50" },
-    { href: `/event/${event.id}/settings`, label: "الإعدادات", icon: Settings, count: null, color: "text-gray-500", bg: "bg-gray-50" },
+  const sidebarGroups = [
+    {
+      title: "المشاركين والفرق",
+      icon: Users,
+      color: "text-blue-500",
+      items: [
+        { href: `/event/${event.id}/participants`, label: "المشاركين", icon: Users, count: event._count.members, color: "text-blue-500", bg: "bg-blue-50" },
+        { href: `/event/${event.id}/teams`, label: "الفرق", icon: Users, count: event._count.teams, color: "text-emerald-500", bg: "bg-emerald-50" },
+        { href: `/event/${event.id}/edit-requests`, label: "طلبات التعديل", icon: FileEdit, count: null, color: "text-orange-500", bg: "bg-orange-50" },
+      ],
+    },
+    {
+      title: "المحتوى والمراحل",
+      icon: Layers,
+      color: "text-purple-500",
+      items: [
+        { href: `/event/${event.id}/tracks`, label: "المسارات", icon: Layers, count: event.tracks.length, color: "text-purple-500", bg: "bg-purple-50" },
+        { href: `/event/${event.id}/phases`, label: "المراحل", icon: Clock, count: event.phases.length, color: "text-amber-500", bg: "bg-amber-50" },
+        { href: `/event/${event.id}/questions`, label: "الأسئلة", icon: FileText, count: event.challenges.reduce((a: number, c: any) => a + c.questions.length, 0), color: "text-orange-500", bg: "bg-orange-50" },
+      ],
+    },
+    {
+      title: "التحكيم والتقييم",
+      icon: Scale,
+      color: "text-brand-500",
+      items: [
+        { href: `/event/${event.id}/judges`, label: "المحكمين", icon: Scale, count: judges.length, color: "text-brand-500", bg: "bg-brand-50" },
+        { href: `/event/${event.id}/criteria`, label: "معايير التقييم", icon: Target, count: event.evaluationCriteria.length, color: "text-pink-500", bg: "bg-pink-50" },
+        { href: `/event/${event.id}/evaluations`, label: "نتائج التقييمات", icon: BarChart3, count: null, color: "text-rose-500", bg: "bg-rose-50" },
+      ],
+    },
+    {
+      title: "الإدارة",
+      icon: Settings,
+      color: "text-gray-500",
+      items: [
+        { href: `/event/${event.id}/mentors`, label: "المرشدين", icon: GraduationCap, count: event.members.filter((m: any) => m.role === "MENTOR").length, color: "text-teal-500", bg: "bg-teal-50" },
+        { href: `/event/${event.id}/certificates`, label: "الشهادات", icon: Award, count: event._count.certificates, color: "text-yellow-600", bg: "bg-yellow-50" },
+        { href: `/event/${event.id}/badges`, label: "بطاقات الحضور", icon: BadgeCheck, count: null, color: "text-indigo-500", bg: "bg-indigo-50" },
+        { href: `/event/${event.id}/tools`, label: "الأدوات", icon: Wrench, count: null, color: "text-cyan-500", bg: "bg-cyan-50" },
+        { href: `/event/${event.id}/settings`, label: "الإعدادات", icon: Settings, count: null, color: "text-gray-500", bg: "bg-gray-50" },
+      ],
+    },
   ];
 
   return (
@@ -768,39 +799,41 @@ export default function EventDetailPage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* Management Links */}
-            <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <Settings className="w-4 h-4 text-gray-500" />
+            {/* Management Links - Grouped */}
+            {sidebarGroups.map((group) => (
+              <div key={group.title} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className={`w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center`}>
+                    <group.icon className={`w-4 h-4 ${group.color}`} />
+                  </div>
+                  <h3 className="text-sm font-bold text-elm-navy">{group.title}</h3>
                 </div>
-                <h3 className="text-sm font-bold text-elm-navy">إدارة الفعالية</h3>
-              </div>
-              <div className="space-y-1">
-                {managementLinks.map((link) => (
-                  <Link
-                    key={link.label}
-                    href={link.href}
-                    className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 transition-all group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 ${link.bg} rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                        <link.icon className={`w-4 h-4 ${link.color}`} />
+                <div className="space-y-1">
+                  {group.items.map((link) => (
+                    <Link
+                      key={link.label}
+                      href={link.href}
+                      className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 transition-all group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 ${link.bg} rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                          <link.icon className={`w-4 h-4 ${link.color}`} />
+                        </div>
+                        <span className="text-sm text-gray-600 group-hover:text-elm-navy font-medium transition-colors">{link.label}</span>
                       </div>
-                      <span className="text-sm text-gray-600 group-hover:text-elm-navy font-medium transition-colors">{link.label}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {link.count !== null && (
-                        <span className="text-xs font-bold text-gray-400 bg-gray-100 px-2.5 py-0.5 rounded-lg group-hover:bg-brand-50 group-hover:text-brand-500 transition-colors">
-                          {link.count}
-                        </span>
-                      )}
-                      <ChevronLeft className="w-4 h-4 text-gray-300 group-hover:text-brand-500 group-hover:-translate-x-0.5 transition-all" />
-                    </div>
-                  </Link>
-                ))}
+                      <div className="flex items-center gap-2">
+                        {link.count !== null && (
+                          <span className="text-xs font-bold text-gray-400 bg-gray-100 px-2.5 py-0.5 rounded-lg group-hover:bg-brand-50 group-hover:text-brand-500 transition-colors">
+                            {link.count}
+                          </span>
+                        )}
+                        <ChevronLeft className="w-4 h-4 text-gray-300 group-hover:text-brand-500 group-hover:-translate-x-0.5 transition-all" />
+                      </div>
+                    </Link>
+                  ))}
+                </div>
               </div>
-            </div>
+            ))}
 
             {/* Evaluation Criteria */}
             {event.evaluationCriteria.length > 0 && (
@@ -1061,3 +1094,4 @@ export default function EventDetailPage() {
     </div>
   );
 }
+                   
