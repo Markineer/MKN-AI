@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   Check,
@@ -14,6 +15,8 @@ import {
   Send,
   Image,
   Calendar,
+  Mail,
+  ArrowLeft,
 } from "lucide-react";
 import type { Phase, EliminationTeam } from "./types";
 
@@ -26,7 +29,9 @@ export default function ResultsTab({
   eventId: string;
   onRefresh: () => void;
 }) {
+  const router = useRouter();
   const [showEliminationPreview, setShowEliminationPreview] = useState(false);
+  const [executionResult, setExecutionResult] = useState<{ advanced: number; eliminated: number } | null>(null);
   const [eliminationPreview, setEliminationPreview] = useState<{
     advancing: EliminationTeam[];
     eliminated: EliminationTeam[];
@@ -137,7 +142,7 @@ export default function ResultsTab({
       });
       if (!res.ok) throw new Error("فشل تنفيذ التأهيل");
       const data = await res.json();
-      alert(`تم التنفيذ بنجاح: ${data.advanced} متأهل، ${data.eliminated} مستبعد`);
+      setExecutionResult({ advanced: data.advanced, eliminated: data.eliminated });
       setShowEliminationPreview(false);
       setEliminationPreview(null);
       onRefresh();
@@ -238,6 +243,52 @@ export default function ResultsTab({
         </div>
       )}
 
+      {/* Execution Result + Send Emails */}
+      {executionResult && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center">
+              <CheckCircle className="w-6 h-6 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-emerald-800">تم تنفيذ التأهيل بنجاح</p>
+              <p className="text-xs text-emerald-600">
+                {executionResult.advanced} فريق متأهل | {executionResult.eliminated} فريق مستبعد
+              </p>
+            </div>
+            <button
+              onClick={() => setExecutionResult(null)}
+              className="mr-auto w-8 h-8 flex items-center justify-center rounded-lg hover:bg-emerald-100"
+            >
+              <X className="w-4 h-4 text-emerald-400" />
+            </button>
+          </div>
+          <div className="flex items-center gap-3 pt-3 border-t border-emerald-200">
+            <p className="text-xs text-emerald-700">أرسل إشعارات للفرق الآن:</p>
+            <button
+              onClick={() => {
+                setExecutionResult(null);
+                setShowNotifyModal(true);
+              }}
+              className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl hover:bg-emerald-700 transition-colors flex items-center gap-2"
+            >
+              <Send className="w-3.5 h-3.5" />
+              إرسال من هنا
+            </button>
+            <button
+              onClick={() => {
+                setExecutionResult(null);
+                router.push(`/event/${eventId}/communications`);
+              }}
+              className="px-4 py-2 bg-white text-emerald-700 text-xs font-bold rounded-xl border border-emerald-300 hover:bg-emerald-50 transition-colors flex items-center gap-2"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              صفحة الرسائل
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Results Table */}
       <div className="bg-gray-50 rounded-xl overflow-hidden">
         <table className="w-full text-sm">
@@ -311,13 +362,22 @@ export default function ResultsTab({
               </p>
             </div>
           </div>
-          <button
-            onClick={() => setShowNotifyModal(true)}
-            className="px-4 py-2 bg-brand-600 text-white text-xs font-bold rounded-xl hover:bg-brand-700 transition-colors flex items-center gap-2"
-          >
-            <Send className="w-3.5 h-3.5" />
-            إرسال إشعارات
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowNotifyModal(true)}
+              className="px-4 py-2 bg-brand-600 text-white text-xs font-bold rounded-xl hover:bg-brand-700 transition-colors flex items-center gap-2"
+            >
+              <Send className="w-3.5 h-3.5" />
+              إرسال سريع
+            </button>
+            <button
+              onClick={() => router.push(`/event/${eventId}/communications`)}
+              className="px-4 py-2 bg-white text-brand-600 text-xs font-bold rounded-xl border border-brand-200 hover:bg-brand-50 transition-colors flex items-center gap-2"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              صفحة الرسائل
+            </button>
+          </div>
         </div>
       )}
 
