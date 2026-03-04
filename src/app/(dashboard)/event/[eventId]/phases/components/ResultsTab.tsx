@@ -11,6 +11,9 @@ import {
   UserX,
   Eye,
   Loader2,
+  Send,
+  Image,
+  Calendar,
 } from "lucide-react";
 import type { Phase, EliminationTeam } from "./types";
 
@@ -34,6 +37,62 @@ export default function ResultsTab({
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [executing, setExecuting] = useState(false);
   const [selectedAdvancing, setSelectedAdvancing] = useState<Set<string>>(new Set());
+
+  // Notification state
+  const [showNotifyModal, setShowNotifyModal] = useState(false);
+  const [notifyForm, setNotifyForm] = useState({
+    message: `يسعدنا إبلاغكم بأن فريقكم قد تم قبوله واجتاز هذه المرحلة بنجاح.\n\nنتطلع لرؤية إبداعاتكم في المرحلة القادمة. بالتوفيق!`,
+    acceptanceDate: "",
+    acceptanceTime: "",
+    imageUrl: "",
+    sendToEliminated: false,
+  });
+  const [sendingNotify, setSendingNotify] = useState(false);
+  const [notifyResult, setNotifyResult] = useState<{ sent: number; failed: number; totalTeams: number } | null>(null);
+
+  const handleSendNotifications = async () => {
+    if (!notifyForm.message.trim()) {
+      alert("الرجاء كتابة نص الرسالة");
+      return;
+    }
+    if (!confirm("هل أنت متأكد من إرسال الإشعارات لجميع الفرق المتأهلة؟")) return;
+
+    setSendingNotify(true);
+    setNotifyResult(null);
+    try {
+      let acceptanceDate: string | null = null;
+      if (notifyForm.acceptanceDate) {
+        acceptanceDate = notifyForm.acceptanceDate;
+        if (notifyForm.acceptanceTime) {
+          acceptanceDate += ` الساعة ${notifyForm.acceptanceTime}`;
+        }
+      }
+
+      const res = await fetch(`/api/events/${eventId}/phases/${phase.id}/notify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: notifyForm.message,
+          acceptanceDate,
+          imageUrl: notifyForm.imageUrl || null,
+          sendToEliminated: notifyForm.sendToEliminated,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "فشل إرسال الإشعارات");
+        return;
+      }
+
+      setNotifyResult(data);
+    } catch (err) {
+      console.error("Failed to send notifications:", err);
+      alert("فشل إرسال الإشعارات");
+    } finally {
+      setSendingNotify(false);
+    }
+  };
 
   const qualMode = phase.qualificationMode || "SCORE_BASED";
 
@@ -239,6 +298,152 @@ export default function ResultsTab({
           </tbody>
         </table>
       </div>
+
+      {/* Send Notifications Section */}
+      {(phase.advanced > 0 || phase.results.some((r) => r.status === "ADVANCED")) && (
+        <div className="bg-brand-50/50 border border-brand-100 rounded-xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Send className="w-5 h-5 text-brand-600" />
+            <div>
+              <p className="text-sm font-bold text-brand-800">إرسال إشعارات القبول</p>
+              <p className="text-[11px] text-brand-600">
+                أرسل رسائل بريد إلكتروني لجميع أعضاء الفرق المتأهلة
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowNotifyModal(true)}
+            className="px-4 py-2 bg-brand-600 text-white text-xs font-bold rounded-xl hover:bg-brand-700 transition-colors flex items-center gap-2"
+          >
+            <Send className="w-3.5 h-3.5" />
+            إرسال إشعارات
+          </button>
+        </div>
+      )}
+
+      {/* Notification Modal */}
+      {showNotifyModal && (
+        <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="text-sm font-bold text-elm-navy">إرسال إشعارات القبول</h3>
+              <button
+                onClick={() => { setShowNotifyModal(false); setNotifyResult(null); }}
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100"
+              >
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              {/* Success result */}
+              {notifyResult && (
+                <div className={`rounded-xl p-4 ${notifyResult.failed === 0 ? "bg-emerald-50 border border-emerald-200" : "bg-amber-50 border border-amber-200"}`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    {notifyResult.failed === 0 ? (
+                      <CheckCircle className="w-4 h-4 text-emerald-600" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    )}
+                    <p className="text-sm font-bold text-elm-navy">
+                      تم الإرسال: {notifyResult.sent} رسالة | {notifyResult.totalTeams} فريق
+                    </p>
+                  </div>
+                  {notifyResult.failed > 0 && (
+                    <p className="text-[11px] text-amber-600">فشل إرسال {notifyResult.failed} رسالة</p>
+                  )}
+                </div>
+              )}
+
+              {/* Acceptance Date & Time */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 flex items-center gap-1">
+                    <Calendar className="w-3 h-3" />
+                    تاريخ القبول
+                  </label>
+                  <input
+                    type="date"
+                    value={notifyForm.acceptanceDate}
+                    onChange={(e) => setNotifyForm({ ...notifyForm, acceptanceDate: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-200"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    الساعة
+                  </label>
+                  <input
+                    type="time"
+                    value={notifyForm.acceptanceTime}
+                    onChange={(e) => setNotifyForm({ ...notifyForm, acceptanceTime: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-200"
+                  />
+                </div>
+              </div>
+
+              {/* Message */}
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">نص الرسالة *</label>
+                <textarea
+                  value={notifyForm.message}
+                  onChange={(e) => setNotifyForm({ ...notifyForm, message: e.target.value })}
+                  rows={5}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-200 resize-none"
+                  placeholder="اكتب نص الرسالة هنا..."
+                  dir="rtl"
+                />
+              </div>
+
+              {/* Image URL */}
+              <div>
+                <label className="text-xs text-gray-500 mb-1 flex items-center gap-1">
+                  <Image className="w-3 h-3" />
+                  رابط صورة (اختياري)
+                </label>
+                <input
+                  type="url"
+                  value={notifyForm.imageUrl}
+                  onChange={(e) => setNotifyForm({ ...notifyForm, imageUrl: e.target.value })}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-200"
+                  placeholder="https://example.com/image.jpg"
+                  dir="ltr"
+                />
+              </div>
+
+              {/* Send to eliminated option */}
+              <label className="flex items-center gap-3 cursor-pointer bg-gray-50 rounded-xl px-4 py-3">
+                <input
+                  type="checkbox"
+                  checked={notifyForm.sendToEliminated}
+                  onChange={(e) => setNotifyForm({ ...notifyForm, sendToEliminated: e.target.checked })}
+                  className="w-4 h-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+                />
+                <div>
+                  <span className="text-xs font-medium text-elm-navy">إرسال للفرق المستبعدة أيضاً</span>
+                  <p className="text-[10px] text-gray-400">رسالة مختلفة تلقائياً للفرق غير المتأهلة</p>
+                </div>
+              </label>
+            </div>
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
+              <button
+                onClick={() => { setShowNotifyModal(false); setNotifyResult(null); }}
+                className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-xl transition-colors"
+              >
+                إغلاق
+              </button>
+              <button
+                onClick={handleSendNotifications}
+                disabled={sendingNotify || !notifyForm.message.trim()}
+                className="px-6 py-2 bg-brand-600 text-white text-sm font-bold rounded-xl hover:bg-brand-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                {sendingNotify ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                إرسال الإشعارات
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ADVANCE_ALL Preview Modal */}
       {showEliminationPreview && eliminationPreview && qualMode === "ADVANCE_ALL" && (

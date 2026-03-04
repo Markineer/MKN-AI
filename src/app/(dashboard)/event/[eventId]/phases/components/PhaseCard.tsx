@@ -55,6 +55,8 @@ export default function PhaseCard({
   const showAutoFilter = phase.evaluationMethod === "AI_AUTO";
   const showJudging =
     phase.evaluationMethod === "JUDGE_MANUAL" || phase.evaluationMethod === "COMBINED";
+  const isRegistration = phase.phaseType === "REGISTRATION";
+  const showResults = phase.isElimination || phase.results.length > 0;
 
   // Status-based card styles
   const cardStyles: Record<string, string> = {
@@ -65,11 +67,11 @@ export default function PhaseCard({
 
   const tabs: { key: TabKey; label: string; icon: any; show: boolean }[] = [
     { key: "overview", label: "نظرة عامة", icon: BarChart3, show: true },
-    { key: "criteria", label: "معايير التقييم", icon: Target, show: true },
-    { key: "judging", label: "التحكيم", icon: UserCheck, show: showJudging },
-    { key: "results", label: "النتائج والتأهيل", icon: Trophy, show: true },
-    { key: "autofilter", label: "التصفية التلقائية", icon: Zap, show: showAutoFilter },
-    { key: "deliverables", label: "التسليمات", icon: FileText, show: true },
+    { key: "criteria", label: "معايير التقييم", icon: Target, show: !isRegistration },
+    { key: "judging", label: "التحكيم", icon: UserCheck, show: showJudging && !isRegistration },
+    { key: "results", label: "النتائج والتأهيل", icon: Trophy, show: showResults },
+    { key: "autofilter", label: "التصفية التلقائية", icon: Zap, show: showAutoFilter && !isRegistration },
+    { key: "deliverables", label: "التسليمات", icon: FileText, show: !isRegistration },
   ];
 
   return (

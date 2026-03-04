@@ -286,6 +286,73 @@ export async function sendPhaseEliminationEmail({
   return sendMail(to, `نتائج ${phaseName} | ${eventName} — مكن AI`, html);
 }
 
+// ─── Custom Phase Notification Email ────────────────────────────
+
+interface CustomPhaseNotificationParams {
+  to: string;
+  teamName: string;
+  eventName: string;
+  phaseName: string;
+  message: string;
+  acceptanceDate?: string | null;
+  imageUrl?: string | null;
+  isAdvanced: boolean;
+}
+
+export async function sendCustomPhaseNotification({
+  to, teamName, eventName, phaseName, message, acceptanceDate, imageUrl, isAdvanced,
+}: CustomPhaseNotificationParams) {
+  const dateLine = acceptanceDate
+    ? `<p style="margin:0 0 4px;color:#6B7280;font-size:14px;">تاريخ القبول: <strong style="color:#1F2937;">${acceptanceDate}</strong></p>`
+    : "";
+
+  const imageLine = imageUrl
+    ? `<div style="margin:0 0 24px;text-align:center;"><img src="${imageUrl}" alt="" style="max-width:100%;border-radius:12px;border:1px solid #E5E7EB;" /></div>`
+    : "";
+
+  const headerBg = isAdvanced
+    ? "background:linear-gradient(135deg,#059669,#047857);"
+    : "background:linear-gradient(135deg,#4B5563,#374151);";
+
+  const headerTitle = isAdvanced ? "تهانينا! تم قبول فريقكم" : "نتائج المرحلة";
+  const headerEmoji = isAdvanced ? "&#127881;" : "";
+
+  // Convert newlines in message to <br>
+  const formattedMessage = message.replace(/\n/g, "<br/>");
+
+  const html = `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#F9FAFB;font-family:'Cairo','Segoe UI',Tahoma,sans-serif;">
+  <div style="max-width:520px;margin:40px auto;background:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid #E5E7EB;">
+    <div style="${headerBg}padding:32px 24px;text-align:center;">
+      ${headerEmoji ? `<div style="font-size:48px;margin-bottom:8px;">${headerEmoji}</div>` : ""}
+      <h1 style="margin:0;color:#FFFFFF;font-size:22px;font-weight:800;">${headerTitle}</h1>
+      <p style="margin:8px 0 0;color:rgba(255,255,255,0.7);font-size:14px;">${phaseName} — ${eventName}</p>
+    </div>
+    <div style="padding:32px 24px;">
+      <p style="margin:0 0 8px;color:#6B7280;font-size:13px;">الفريق: <strong style="color:#1F2937;">${teamName}</strong></p>
+      ${dateLine}
+      ${imageLine}
+      <div style="background:#F9FAFB;border-radius:12px;padding:20px;margin:16px 0 24px;border:1px solid #E5E7EB;">
+        <p style="margin:0;color:#374151;font-size:15px;line-height:1.8;">${formattedMessage}</p>
+      </div>
+    </div>
+    <div style="border-top:1px solid #E5E7EB;padding:16px 24px;text-align:center;">
+      <p style="margin:0;color:#9CA3AF;font-size:11px;">منصة مكن AI — من علم وماركنير</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const subject = isAdvanced
+    ? `تهانينا! تم قبول فريق ${teamName} | ${eventName}`
+    : `نتائج ${phaseName} — فريق ${teamName} | ${eventName}`;
+
+  return sendMail(to, subject, html);
+}
+
 // ─── Team Edit Request Email ────────────────────────────────────
 
 interface TeamEditRequestEmailParams {
