@@ -17,6 +17,9 @@ import {
   Calendar,
   Mail,
   ArrowLeft,
+  Trophy,
+  Medal,
+  Crown,
 } from "lucide-react";
 import type { Phase, EliminationTeam } from "./types";
 
@@ -35,9 +38,10 @@ export default function ResultsTab({
   const [eliminationPreview, setEliminationPreview] = useState<{
     advancing: EliminationTeam[];
     eliminated: EliminationTeam[];
-    teams?: { teamId: string; teamName: string; trackId: string | null; avgScore: number; evaluationCount: number }[];
+    teams?: { teamId: string; teamName: string; trackId: string | null; trackName: string | null; trackColor: string | null; avgScore: number; evaluationCount: number }[];
     stats: { total: number; advancing: number; eliminated: number };
     phase: any;
+    tracks?: { id: string; nameAr: string; color: string }[];
   } | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [executing, setExecuting] = useState(false);
@@ -222,13 +226,22 @@ export default function ResultsTab({
 
       {/* SCORE_BASED Mode Banner */}
       {qualMode === "SCORE_BASED" && phase.isElimination && phase.status === "ACTIVE" && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between">
+        <div className={`${phase.advancementMode === "PER_TRACK" ? "bg-amber-50 border border-amber-200" : "bg-amber-50 border border-amber-200"} rounded-xl p-4 flex items-center justify-between`}>
           <div className="flex items-center gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-600" />
+            {phase.advancementMode === "PER_TRACK" ? (
+              <Trophy className="w-5 h-5 text-amber-600" />
+            ) : (
+              <AlertTriangle className="w-5 h-5 text-amber-600" />
+            )}
             <div>
-              <p className="text-sm font-bold text-amber-800">مرحلة تصفية نشطة</p>
+              <p className="text-sm font-bold text-amber-800">
+                {phase.advancementMode === "PER_TRACK" ? "تحديد الفائزين حسب المسار" : "مرحلة تصفية نشطة"}
+              </p>
               <p className="text-[11px] text-amber-600">
-                سيتم تصفية الفرق بناءً على الدرجات. حد النجاح: {phase.passThreshold ?? "—"}% | الحد الأقصى للمتأهلين: {phase.maxAdvancing ?? "—"}
+                {phase.advancementMode === "PER_TRACK"
+                  ? `أعلى ${phase.maxAdvancing ?? 3} فرق من كل مسار بناءً على الدرجات`
+                  : `سيتم تصفية الفرق بناءً على الدرجات. حد النجاح: ${phase.passThreshold ?? "—"}% | الحد الأقصى للمتأهلين: ${phase.maxAdvancing ?? "—"}`
+                }
               </p>
             </div>
           </div>
@@ -238,7 +251,7 @@ export default function ResultsTab({
             className="px-4 py-2 bg-amber-600 text-white text-xs font-bold rounded-xl hover:bg-amber-700 transition-colors flex items-center gap-2 disabled:opacity-50"
           >
             {loadingPreview ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
-            معاينة التصفية
+            {phase.advancementMode === "PER_TRACK" ? "معاينة الفائزين" : "معاينة التصفية"}
           </button>
         </div>
       )}
@@ -288,6 +301,76 @@ export default function ResultsTab({
           </div>
         </div>
       )}
+
+      {/* Per-Track Winners Display */}
+      {phase.advancementMode === "PER_TRACK" && phase.results.some((r) => r.status === "ADVANCED") && (() => {
+        const advancedResults = phase.results.filter((r) => r.status === "ADVANCED");
+        // Group by track
+        const byTrack: Record<string, { trackName: string; trackColor: string; teams: typeof advancedResults }> = {};
+        for (const r of advancedResults) {
+          const key = r.trackId || "no_track";
+          if (!byTrack[key]) {
+            byTrack[key] = { trackName: r.trackName || "بدون مسار", trackColor: r.trackColor || "#6B7280", teams: [] };
+          }
+          byTrack[key].teams.push(r);
+        }
+        // Sort teams within each track by score descending
+        for (const group of Object.values(byTrack)) {
+          group.teams.sort((a, b) => (b.totalScore ?? 0) - (a.totalScore ?? 0));
+        }
+
+        const rankConfig = [
+          { label: "المركز الأول", icon: Crown, bg: "from-amber-50 to-yellow-50", border: "border-amber-200", badge: "bg-amber-100 text-amber-800", medal: "text-amber-500", ring: "ring-amber-200" },
+          { label: "المركز الثاني", icon: Medal, bg: "from-slate-50 to-gray-50", border: "border-slate-200", badge: "bg-slate-100 text-slate-700", medal: "text-slate-400", ring: "ring-slate-200" },
+          { label: "المركز الثالث", icon: Medal, bg: "from-orange-50 to-amber-50/50", border: "border-orange-200", badge: "bg-orange-100 text-orange-700", medal: "text-orange-400", ring: "ring-orange-200" },
+        ];
+
+        return (
+          <div className="space-y-5">
+            <div className="flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-amber-500" />
+              <h3 className="text-sm font-bold text-elm-navy">الفائزون حسب المسار</h3>
+              <span className="text-[10px] text-gray-400">3 مراكز من كل مسار</span>
+            </div>
+            {Object.entries(byTrack).map(([trackId, group]) => (
+              <div key={trackId} className="rounded-2xl border border-gray-100 overflow-hidden">
+                {/* Track Header */}
+                <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-100" style={{ backgroundColor: `${group.trackColor}10` }}>
+                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: group.trackColor }} />
+                  <h4 className="text-sm font-bold text-elm-navy">{group.trackName}</h4>
+                  <span className="text-[10px] text-gray-400">{group.teams.length} فائز</span>
+                </div>
+                {/* Winners */}
+                <div className="divide-y divide-gray-50">
+                  {group.teams.map((r, idx) => {
+                    const cfg = rankConfig[Math.min(idx, 2)];
+                    const RankIcon = cfg.icon;
+                    return (
+                      <div key={r.id} className={`flex items-center gap-4 px-5 py-3.5 bg-gradient-to-l ${cfg.bg}`}>
+                        <div className={`flex items-center justify-center w-9 h-9 rounded-xl bg-white border shadow-sm ${cfg.border}`}>
+                          <RankIcon className={`w-4.5 h-4.5 ${cfg.medal}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-elm-navy">{r.teamName || r.nameAr || r.name || "—"}</p>
+                          <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${cfg.badge}`}>
+                            {cfg.label}
+                          </span>
+                        </div>
+                        {r.totalScore !== null && (
+                          <div className="text-left">
+                            <p className="text-base font-bold text-elm-navy">{typeof r.totalScore === "number" ? r.totalScore.toFixed(1) : r.totalScore}</p>
+                            <p className="text-[9px] text-gray-400">درجة</p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Results Table */}
       <div className="bg-gray-50 rounded-xl overflow-hidden">
@@ -616,7 +699,9 @@ export default function ResultsTab({
         <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h3 className="text-sm font-bold text-elm-navy">معاينة نتائج التصفية</h3>
+              <h3 className="text-sm font-bold text-elm-navy">
+                {eliminationPreview.phase?.advancementMode === "PER_TRACK" ? "معاينة الفائزين حسب المسار" : "معاينة نتائج التصفية"}
+              </h3>
               <button onClick={() => setShowEliminationPreview(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100">
                 <X className="w-4 h-4 text-gray-400" />
               </button>
@@ -628,45 +713,102 @@ export default function ResultsTab({
               </div>
               <div className="bg-emerald-50 rounded-xl p-3 text-center">
                 <p className="text-xl font-bold text-emerald-700">{eliminationPreview.stats.advancing}</p>
-                <p className="text-[10px] text-emerald-600">سيتأهلون</p>
+                <p className="text-[10px] text-emerald-600">{eliminationPreview.phase?.advancementMode === "PER_TRACK" ? "فائز" : "سيتأهلون"}</p>
               </div>
               <div className="bg-red-50 rounded-xl p-3 text-center">
                 <p className="text-xl font-bold text-red-600">{eliminationPreview.stats.eliminated}</p>
                 <p className="text-[10px] text-red-500">سيُستبعدون</p>
               </div>
             </div>
-            <div className="px-6 pb-2">
-              <p className="text-xs font-bold text-emerald-700 mb-2 flex items-center gap-1"><UserCheck className="w-3.5 h-3.5" /> المتأهلون ({eliminationPreview.advancing.length})</p>
-              <div className="space-y-1 max-h-[150px] overflow-y-auto">
-                {eliminationPreview.advancing.map((t, i) => (
-                  <div key={t.teamId} className="flex items-center justify-between bg-emerald-50/50 rounded-lg px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 w-5 h-5 rounded-full flex items-center justify-center">{t.rank || i + 1}</span>
-                      <span className="text-xs font-medium text-elm-navy">{t.teamName}</span>
+
+            {/* Per-Track Grouped Preview */}
+            {eliminationPreview.phase?.advancementMode === "PER_TRACK" ? (() => {
+              const byTrack: Record<string, { trackName: string; trackColor: string; teams: EliminationTeam[] }> = {};
+              for (const t of eliminationPreview.advancing) {
+                const key = t.trackId || "no_track";
+                if (!byTrack[key]) {
+                  byTrack[key] = { trackName: t.trackName || "بدون مسار", trackColor: t.trackColor || "#6B7280", teams: [] };
+                }
+                byTrack[key].teams.push(t);
+              }
+              const rankLabels = ["🥇", "🥈", "🥉"];
+              return (
+                <div className="px-6 pb-4 space-y-3">
+                  {Object.entries(byTrack).map(([trackId, group]) => (
+                    <div key={trackId} className="rounded-xl border border-gray-100 overflow-hidden">
+                      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-50" style={{ backgroundColor: `${group.trackColor}15` }}>
+                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: group.trackColor }} />
+                        <span className="text-xs font-bold text-elm-navy">{group.trackName}</span>
+                        <span className="text-[10px] text-gray-400">{group.teams.length} فائز</span>
+                      </div>
+                      <div className="divide-y divide-gray-50">
+                        {group.teams.map((t, i) => (
+                          <div key={t.teamId} className="flex items-center justify-between px-4 py-2.5 bg-emerald-50/30">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm">{rankLabels[Math.min(i, 2)]}</span>
+                              <span className="text-xs font-medium text-elm-navy">{t.teamName}</span>
+                            </div>
+                            <span className="text-xs font-bold text-emerald-700">{t.avgScore.toFixed(1)}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <span className="text-xs font-bold text-emerald-700">{t.avgScore.toFixed(1)}</span>
+                  ))}
+                  {eliminationPreview.eliminated.length > 0 && (
+                    <div className="pt-2">
+                      <p className="text-xs font-bold text-red-600 mb-2 flex items-center gap-1"><UserX className="w-3.5 h-3.5" /> لم يتأهلوا ({eliminationPreview.eliminated.length})</p>
+                      <div className="space-y-1 max-h-[120px] overflow-y-auto">
+                        {eliminationPreview.eliminated.map((t) => (
+                          <div key={t.teamId} className="flex items-center justify-between bg-red-50/50 rounded-lg px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-elm-navy">{t.teamName}</span>
+                              {t.trackName && <span className="text-[9px] text-gray-400 px-1.5 py-0.5 bg-gray-100 rounded-full">{t.trackName}</span>}
+                            </div>
+                            <span className="text-xs font-bold text-red-600">{t.avgScore.toFixed(1)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })() : (
+              <>
+                <div className="px-6 pb-2">
+                  <p className="text-xs font-bold text-emerald-700 mb-2 flex items-center gap-1"><UserCheck className="w-3.5 h-3.5" /> المتأهلون ({eliminationPreview.advancing.length})</p>
+                  <div className="space-y-1 max-h-[150px] overflow-y-auto">
+                    {eliminationPreview.advancing.map((t, i) => (
+                      <div key={t.teamId} className="flex items-center justify-between bg-emerald-50/50 rounded-lg px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 w-5 h-5 rounded-full flex items-center justify-center">{t.rank || i + 1}</span>
+                          <span className="text-xs font-medium text-elm-navy">{t.teamName}</span>
+                        </div>
+                        <span className="text-xs font-bold text-emerald-700">{t.avgScore.toFixed(1)}</span>
+                      </div>
+                    ))}
+                    {eliminationPreview.advancing.length === 0 && <p className="text-center text-xs text-gray-400 py-3">لا يوجد فرق متأهلة</p>}
                   </div>
-                ))}
-                {eliminationPreview.advancing.length === 0 && <p className="text-center text-xs text-gray-400 py-3">لا يوجد فرق متأهلة</p>}
-              </div>
-            </div>
-            <div className="px-6 pb-4">
-              <p className="text-xs font-bold text-red-600 mb-2 flex items-center gap-1"><UserX className="w-3.5 h-3.5" /> المستبعدون ({eliminationPreview.eliminated.length})</p>
-              <div className="space-y-1 max-h-[150px] overflow-y-auto">
-                {eliminationPreview.eliminated.map((t) => (
-                  <div key={t.teamId} className="flex items-center justify-between bg-red-50/50 rounded-lg px-3 py-2">
-                    <span className="text-xs font-medium text-elm-navy">{t.teamName}</span>
-                    <span className="text-xs font-bold text-red-600">{t.avgScore.toFixed(1)}</span>
+                </div>
+                <div className="px-6 pb-4">
+                  <p className="text-xs font-bold text-red-600 mb-2 flex items-center gap-1"><UserX className="w-3.5 h-3.5" /> المستبعدون ({eliminationPreview.eliminated.length})</p>
+                  <div className="space-y-1 max-h-[150px] overflow-y-auto">
+                    {eliminationPreview.eliminated.map((t) => (
+                      <div key={t.teamId} className="flex items-center justify-between bg-red-50/50 rounded-lg px-3 py-2">
+                        <span className="text-xs font-medium text-elm-navy">{t.teamName}</span>
+                        <span className="text-xs font-bold text-red-600">{t.avgScore.toFixed(1)}</span>
+                      </div>
+                    ))}
+                    {eliminationPreview.eliminated.length === 0 && <p className="text-center text-xs text-gray-400 py-3">لا يوجد فرق مستبعدة</p>}
                   </div>
-                ))}
-                {eliminationPreview.eliminated.length === 0 && <p className="text-center text-xs text-gray-400 py-3">لا يوجد فرق مستبعدة</p>}
-              </div>
-            </div>
+                </div>
+              </>
+            )}
+
             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
               <button onClick={() => setShowEliminationPreview(false)} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-xl transition-colors">إلغاء</button>
               <button onClick={handleExecuteElimination} disabled={executing} className="px-6 py-2 bg-red-600 text-white text-sm font-bold rounded-xl hover:bg-red-700 transition-colors flex items-center gap-2 disabled:opacity-50">
-                {executing ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
-                تنفيذ التصفية
+                {executing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trophy className="w-4 h-4" />}
+                {eliminationPreview.phase?.advancementMode === "PER_TRACK" ? "تأكيد الفائزين" : "تنفيذ التصفية"}
               </button>
             </div>
           </div>

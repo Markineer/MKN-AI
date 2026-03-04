@@ -33,6 +33,9 @@ export interface PhaseResult {
   name?: string;
   nameAr?: string;
   teamName?: string;
+  trackId?: string | null;
+  trackName?: string | null;
+  trackColor?: string | null;
   score?: number | null;
   totalScore: number | null;
   status: "PENDING" | "EVALUATED" | "ADVANCED" | "ELIMINATED";
@@ -143,6 +146,8 @@ export interface EliminationTeam {
   teamId: string;
   teamName: string;
   trackId: string | null;
+  trackName: string | null;
+  trackColor: string | null;
   avgScore: number;
   rank?: number;
 }

@@ -27,6 +27,13 @@ export async function GET(
     return NextResponse.json({ error: "المرحلة غير موجودة" }, { status: 404 });
   }
 
+  // Fetch tracks for enriching results
+  const tracks = await prisma.eventTrack.findMany({
+    where: { eventId },
+    select: { id: true, name: true, nameAr: true, color: true },
+  });
+  const trackMap = Object.fromEntries(tracks.map((t) => [t.id, t]));
+
   // ── ADVANCE_ALL mode: everyone advances ──
   if (phase.qualificationMode === "ADVANCE_ALL") {
     const teams = await prisma.team.findMany({
@@ -39,6 +46,8 @@ export async function GET(
         teamId: t.id,
         teamName: t.nameAr || t.name,
         trackId: t.trackId,
+        trackName: t.trackId ? trackMap[t.trackId]?.nameAr : null,
+        trackColor: t.trackId ? trackMap[t.trackId]?.color : null,
         avgScore: 0,
         rank: i + 1,
       })),
@@ -63,7 +72,7 @@ export async function GET(
   // Calculate average score per team
   const teamScores: Record<
     string,
-    { teamId: string; teamName: string; trackId: string | null; scores: number[]; avgScore: number }
+    { teamId: string; teamName: string; trackId: string | null; trackName: string | null; trackColor: string | null; scores: number[]; avgScore: number }
   > = {};
 
   for (const ev of evaluations) {
@@ -73,6 +82,8 @@ export async function GET(
         teamId: ev.teamId,
         teamName: ev.team.nameAr || ev.team.name,
         trackId: ev.team.trackId,
+        trackName: ev.team.trackId ? trackMap[ev.team.trackId]?.nameAr || null : null,
+        trackColor: ev.team.trackId ? trackMap[ev.team.trackId]?.color || null : null,
         scores: [],
         avgScore: 0,
       };
@@ -92,6 +103,8 @@ export async function GET(
         teamId: r.teamId,
         teamName: team.nameAr || team.name,
         trackId: team.trackId,
+        trackName: team.trackId ? trackMap[team.trackId]?.nameAr || null : null,
+        trackColor: team.trackId ? trackMap[team.trackId]?.color || null : null,
         scores: [],
         avgScore: 0,
       };
@@ -121,6 +134,8 @@ export async function GET(
         teamId: t.id,
         teamName: t.nameAr || t.name,
         trackId: t.trackId,
+        trackName: t.trackId ? trackMap[t.trackId]?.nameAr || null : null,
+        trackColor: t.trackId ? trackMap[t.trackId]?.color || null : null,
         avgScore: scored?.avgScore || 0,
         evaluationCount: scored?.scores.length || 0,
       };
@@ -154,8 +169,21 @@ export async function GET(
     applyElimination(sortedTeams, phase, advancing, eliminated);
   }
 
+  // Assign ranks: per-track if PER_TRACK mode, otherwise global
+  let rankedAdvancing;
+  if (phase.advancementMode === "PER_TRACK") {
+    const trackRankCounters: Record<string, number> = {};
+    rankedAdvancing = advancing.map((t) => {
+      const key = t.trackId || "no_track";
+      trackRankCounters[key] = (trackRankCounters[key] || 0) + 1;
+      return { ...t, rank: trackRankCounters[key] };
+    });
+  } else {
+    rankedAdvancing = advancing.map((t, i) => ({ ...t, rank: i + 1 }));
+  }
+
   return NextResponse.json({
-    advancing: advancing.map((t, i) => ({ ...t, rank: i + 1 })),
+    advancing: rankedAdvancing,
     eliminated,
     stats: {
       total: sortedTeams.length,
@@ -169,6 +197,7 @@ export async function GET(
       advancementMode: phase.advancementMode,
       qualificationMode: phase.qualificationMode,
     },
+    tracks: phase.advancementMode === "PER_TRACK" ? tracks.map((t) => ({ id: t.id, nameAr: t.nameAr, color: t.color })) : undefined,
   });
 }
 

@@ -50,6 +50,14 @@ export async function GET(
     where: { eventId },
     select: { id: true, name: true, nameAr: true, trackId: true, status: true },
   });
+  const teamMap = Object.fromEntries(teams.map((t) => [t.id, t]));
+
+  // Get tracks for enriching results
+  const tracks = await prisma.eventTrack.findMany({
+    where: { eventId },
+    select: { id: true, name: true, nameAr: true, color: true },
+  });
+  const trackMap = Object.fromEntries(tracks.map((t) => [t.id, t]));
 
   const enriched = phases.map((phase) => {
     const phaseTeamResults = phase.results.filter((r) => r.teamId);
@@ -58,8 +66,22 @@ export async function GET(
     const eliminated = phaseTeamResults.filter((r) => r.status === "ELIMINATED").length;
     const evaluated = phaseTeamResults.filter((r) => r.status === "EVALUATED" || r.status === "ADVANCED" || r.status === "ELIMINATED").length;
 
+    // Enrich results with team name and track info
+    const enrichedResults = phase.results.map((r) => {
+      const team = r.teamId ? teamMap[r.teamId] : null;
+      const track = team?.trackId ? trackMap[team.trackId] : null;
+      return {
+        ...r,
+        teamName: team?.nameAr || team?.name || null,
+        trackId: team?.trackId || null,
+        trackName: track?.nameAr || null,
+        trackColor: track?.color || null,
+      };
+    });
+
     return {
       ...phase,
+      results: enrichedResults,
       totalParticipants: teams.length,
       evaluatedTeams: uniqueTeams.size,
       advanced,
