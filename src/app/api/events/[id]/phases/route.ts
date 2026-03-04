@@ -20,6 +20,27 @@ export async function GET(
       assignments: {
         select: { id: true, judgeId: true, teamId: true, status: true },
       },
+      scheduleItems: {
+        orderBy: [{ date: "asc" }, { sortOrder: "asc" }],
+        select: {
+          id: true,
+          title: true,
+          titleAr: true,
+          description: true,
+          descriptionAr: true,
+          type: true,
+          date: true,
+          startTime: true,
+          endTime: true,
+          isOnline: true,
+          isInPerson: true,
+          onlineLink: true,
+          location: true,
+          locationAr: true,
+          speaker: true,
+          speakerAr: true,
+        },
+      },
     },
     orderBy: { phaseNumber: "asc" },
   });

@@ -64,6 +64,8 @@ export interface Phase {
   id: string;
   name: string;
   nameAr: string;
+  description?: string | null;
+  descriptionAr?: string | null;
   phaseNumber: number;
   phaseType: PhaseType;
   status: PhaseStatus;
@@ -82,6 +84,7 @@ export interface Phase {
   criteria: PhaseCriteria[];
   results: PhaseResult[];
   assignments: any[];
+  scheduleItems: ScheduleItem[];
   totalParticipants: number;
   evaluatedTeams: number;
   advanced: number;
@@ -113,6 +116,27 @@ export interface AutoFilterTeam {
   memberCount: number;
   passedRules: string[];
   failedRules: string[];
+}
+
+export type ScheduleItemType = "WORKSHOP" | "SESSION" | "DEADLINE" | "CEREMONY" | "BREAK" | "MENTORING" | "PRESENTATION";
+
+export interface ScheduleItem {
+  id: string;
+  title: string;
+  titleAr: string | null;
+  description: string | null;
+  descriptionAr: string | null;
+  type: ScheduleItemType;
+  date: string;
+  startTime: string | null;
+  endTime: string | null;
+  isOnline: boolean;
+  isInPerson: boolean;
+  onlineLink: string | null;
+  location: string | null;
+  locationAr: string | null;
+  speaker: string | null;
+  speakerAr: string | null;
 }
 
 export interface EliminationTeam {
