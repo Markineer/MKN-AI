@@ -62,7 +62,7 @@ interface Track {
   icon: string | null;
   isActive: boolean;
   sortOrder: number;
-  _count: { teams: number; judges: number };
+  _count: { teams: number; participants: number };
 }
 
 export default function TracksPage() {
@@ -168,7 +168,7 @@ export default function TracksPage() {
   }
 
   const totalTeams = tracks.reduce((s, t) => s + t._count.teams, 0);
-  const totalJudges = tracks.reduce((s, t) => s + t._count.judges, 0);
+  const totalParticipants = tracks.reduce((s, t) => s + t._count.participants, 0);
 
   return (
     <div>
@@ -179,7 +179,7 @@ export default function TracksPage() {
           <div>
             <h2 className="text-2xl font-bold text-elm-navy">مسارات الفعالية</h2>
             <p className="text-sm text-gray-500 mt-1">
-              {tracks.length} مسارات | {totalTeams} فريق | {totalJudges} محكم
+              {tracks.length} مسارات | {totalTeams} فريق | {totalParticipants} مشترك
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -312,8 +312,8 @@ export default function TracksPage() {
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-gray-500">
                       <UserCheck className="w-3.5 h-3.5" />
-                      <span className="font-bold text-elm-navy">{track._count.judges}</span>
-                      <span>محكم</span>
+                      <span className="font-bold text-elm-navy">{track._count.participants}</span>
+                      <span>مشترك</span>
                     </div>
                   </div>
                 </div>

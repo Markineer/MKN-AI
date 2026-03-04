@@ -14,17 +14,26 @@ export async function GET(
   const tracks = await prisma.eventTrack.findMany({
     where: { eventId: params.id },
     include: {
-      _count: {
+      _count: { select: { teams: true } },
+      teams: {
         select: {
-          teams: true,
-          judges: true,
+          _count: { select: { members: true } },
         },
       },
     },
     orderBy: { sortOrder: "asc" },
   });
 
-  return NextResponse.json({ tracks });
+  // Compute participant counts from team members
+  const result = tracks.map(({ teams, ...track }) => ({
+    ...track,
+    _count: {
+      ...track._count,
+      participants: teams.reduce((sum, t) => sum + t._count.members, 0),
+    },
+  }));
+
+  return NextResponse.json({ tracks: result });
 }
 
 // POST: create a new track
@@ -63,13 +72,20 @@ export async function POST(
       sortOrder: (lastTrack?.sortOrder ?? -1) + 1,
     },
     include: {
-      _count: {
-        select: { teams: true, judges: true },
+      _count: { select: { teams: true } },
+      teams: {
+        select: { _count: { select: { members: true } } },
       },
     },
   });
 
-  return NextResponse.json({ track }, { status: 201 });
+  const { teams, ...rest } = track;
+  const result = {
+    ...rest,
+    _count: { ...rest._count, participants: teams.reduce((s, t) => s + t._count.members, 0) },
+  };
+
+  return NextResponse.json({ track: result }, { status: 201 });
 }
 
 // PUT: update an existing track
@@ -101,13 +117,20 @@ export async function PUT(
       ...(isActive !== undefined && { isActive }),
     },
     include: {
-      _count: {
-        select: { teams: true, judges: true },
+      _count: { select: { teams: true } },
+      teams: {
+        select: { _count: { select: { members: true } } },
       },
     },
   });
 
-  return NextResponse.json({ track });
+  const { teams, ...rest } = track;
+  const result = {
+    ...rest,
+    _count: { ...rest._count, participants: teams.reduce((s, t) => s + t._count.members, 0) },
+  };
+
+  return NextResponse.json({ track: result });
 }
 
 // DELETE: delete a track
