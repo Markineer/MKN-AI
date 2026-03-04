@@ -614,6 +614,7 @@ model EventMember {
   assignedBy  String?  @map("assigned_by")
   approvedAt  DateTime? @map("approved_at")
   trackId     String?  @map("track_id")
+  trackIds    String[] @default([]) @map("track_ids")
   notes       String?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -1363,6 +1364,7 @@ model JudgeInvitation {
   eventId    String    @map("event_id")
   email      String
   trackId    String?   @map("track_id")
+  trackIds   String[]  @default([]) @map("track_ids")
   invitedBy  String?   @map("invited_by")
   token      String    @unique
   expiresAt  DateTime  @map("expires_at")

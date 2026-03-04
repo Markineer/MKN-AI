@@ -235,12 +235,14 @@ async function buildDistribution(eventId: string, phaseId: string) {
     });
   } else {
     // Per-track distribution
-    // Judges with trackId=null can be assigned to any track
-    const globalJudges = judges.filter((j) => !j.trackId);
+    // Judges with no tracks assigned can be assigned to any track
+    const globalJudges = judges.filter((j) => !j.trackId && (!j.trackIds || j.trackIds.length === 0));
 
     for (const track of tracks) {
-      // Track-specific judges + global judges (no trackId)
-      const trackJudges = judges.filter((j) => j.trackId === track.id);
+      // Track-specific judges (by trackIds or legacy trackId) + global judges
+      const trackJudges = judges.filter((j) =>
+        (j.trackIds && j.trackIds.length > 0 ? j.trackIds.includes(track.id) : j.trackId === track.id)
+      );
       const availableJudges = [...trackJudges, ...globalJudges];
       const trackTeams = teams.filter((t) => t.trackId === track.id);
 

@@ -108,6 +108,7 @@ export async function POST(req: NextRequest) {
         role: "JUDGE",
         status: "APPROVED",
         trackId: invitation.trackId,
+        trackIds: invitation.trackIds || (invitation.trackId ? [invitation.trackId] : []),
         approvedAt: new Date(),
       },
     });

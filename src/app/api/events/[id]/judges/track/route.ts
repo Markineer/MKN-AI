@@ -11,7 +11,11 @@ export async function PATCH(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { memberId, trackId } = body;
+  const { memberId, trackIds } = body;
+  // Backward compat
+  const resolvedTrackIds: string[] = trackIds && Array.isArray(trackIds)
+    ? trackIds
+    : body.trackId !== undefined ? (body.trackId ? [body.trackId] : []) : [];
 
   if (!memberId) {
     return NextResponse.json({ error: "memberId is required" }, { status: 400 });
@@ -19,7 +23,10 @@ export async function PATCH(
 
   const member = await prisma.eventMember.update({
     where: { id: memberId },
-    data: { trackId: trackId || null },
+    data: {
+      trackId: resolvedTrackIds[0] || null,
+      trackIds: resolvedTrackIds,
+    },
     include: {
       user: {
         select: {

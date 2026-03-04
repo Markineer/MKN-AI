@@ -33,7 +33,11 @@ export async function POST(
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { email, trackId } = body;
+  const { email, trackIds } = body;
+  // Backward compat: accept old `trackId` as single-element array
+  const resolvedTrackIds: string[] = trackIds && Array.isArray(trackIds) && trackIds.length > 0
+    ? trackIds
+    : body.trackId ? [body.trackId] : [];
 
   if (!email?.trim()) {
     return NextResponse.json({ error: "البريد الإلكتروني مطلوب" }, { status: 400 });
@@ -65,14 +69,14 @@ export async function POST(
     return NextResponse.json({ error: "يوجد دعوة معلقة لهذا البريد الإلكتروني بالفعل" }, { status: 409 });
   }
 
-  // Get track name if specified
+  // Get track names for email
   let trackNameAr: string | null = null;
-  if (trackId) {
-    const track = await prisma.eventTrack.findUnique({
-      where: { id: trackId },
-      select: { nameAr: true },
+  if (resolvedTrackIds.length > 0) {
+    const selectedTracks = await prisma.eventTrack.findMany({
+      where: { id: { in: resolvedTrackIds } },
+      select: { nameAr: true, name: true },
     });
-    trackNameAr = track?.nameAr || null;
+    trackNameAr = selectedTracks.map(t => t.nameAr || t.name).join("، ");
   }
 
   // Generate token
@@ -84,7 +88,8 @@ export async function POST(
     data: {
       eventId: params.id,
       email,
-      trackId: trackId || null,
+      trackId: resolvedTrackIds[0] || null,
+      trackIds: resolvedTrackIds,
       invitedBy: (session.user as any).id || null,
       token,
       expiresAt,
@@ -112,7 +117,7 @@ export async function POST(
   }
 
   return NextResponse.json({
-    invitation,
+    invitation: { ...invitation, trackIds: resolvedTrackIds },
     message: emailSent
       ? "تم إرسال الدعوة بنجاح على البريد الإلكتروني"
       : "تم إنشاء الدعوة بنجاح (لم يتم إرسال البريد)",

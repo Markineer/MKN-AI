@@ -35,6 +35,7 @@ interface Judge {
   userId: string;
   status: string;
   trackId: string | null;
+  trackIds: string[];
   createdAt: string;
   user: {
     id: string;
@@ -61,6 +62,7 @@ interface Invitation {
   id: string;
   email: string;
   trackId: string | null;
+  trackIds: string[];
   acceptedAt: string | null;
   expiresAt: string;
   createdAt: string;
@@ -87,7 +89,7 @@ export default function JudgesPage() {
 
   // Invite form state
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteTrackId, setInviteTrackId] = useState<string>("");
+  const [inviteTrackIds, setInviteTrackIds] = useState<string[]>([]);
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState("");
@@ -199,22 +201,21 @@ export default function JudgesPage() {
     }
   }
 
-  async function assignTrack(memberId: string, trackId: string | null) {
+  async function assignTracks(memberId: string, trackIds: string[]) {
     setUpdatingTrack(memberId);
     try {
       const res = await fetch(`/api/events/${eventId}/judges/track`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ memberId, trackId }),
+        body: JSON.stringify({ memberId, trackIds }),
       });
       if (!res.ok) throw new Error();
       const updated = await res.json();
-      setJudges(prev => prev.map(j => j.id === memberId ? updated : j));
+      setJudges(prev => prev.map(j => j.id === memberId ? { ...updated, trackIds } : j));
     } catch {
       // silently fail
     } finally {
       setUpdatingTrack(null);
-      setOpenTrackDropdown(null);
     }
   }
 
@@ -233,7 +234,7 @@ export default function JudgesPage() {
       const res = await fetch(`/api/events/${eventId}/judges/invite`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail.trim(), trackId: inviteTrackId || null }),
+        body: JSON.stringify({ email: inviteEmail.trim(), trackIds: inviteTrackIds }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "فشل إرسال الدعوة");
@@ -242,7 +243,7 @@ export default function JudgesPage() {
       setLastAcceptUrl(data.acceptUrl || "");
       setInvitations(prev => [data.invitation, ...prev]);
       setInviteEmail("");
-      setInviteTrackId("");
+      setInviteTrackIds([]);
     } catch (e: any) {
       setInviteError(e.message);
     } finally {
@@ -274,9 +275,11 @@ export default function JudgesPage() {
   // Group judges by track for summary
   const trackSummary = tracks.map(t => ({
     ...t,
-    judgeCount: judges.filter(j => j.trackId === t.id).length,
+    judgeCount: judges.filter(j =>
+      (j.trackIds && j.trackIds.length > 0 ? j.trackIds.includes(t.id) : j.trackId === t.id)
+    ).length,
   }));
-  const unassignedCount = judges.filter(j => !j.trackId).length;
+  const unassignedCount = judges.filter(j => !j.trackId && (!j.trackIds || j.trackIds.length === 0)).length;
 
   const pendingInvites = invitations.filter(i => !i.acceptedAt && new Date(i.expiresAt) > new Date());
   const acceptedInvites = invitations.filter(i => i.acceptedAt);
@@ -362,11 +365,20 @@ export default function JudgesPage() {
                     <p className="text-sm font-medium text-gray-800" dir="ltr">{inv.email}</p>
                     <div className="flex items-center gap-2 text-[10px] text-gray-500">
                       <span>أرسلت {new Date(inv.createdAt).toLocaleDateString("ar-SA")}</span>
-                      {inv.track && (
+                      {inv.trackIds && inv.trackIds.length > 0 ? (
+                        inv.trackIds.map(tid => {
+                          const t = tracks.find(tr => tr.id === tid);
+                          return t ? (
+                            <span key={tid} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full" style={{ backgroundColor: (t.color || "#7C3AED") + "15", color: t.color || "#7C3AED" }}>
+                              {t.nameAr || t.name}
+                            </span>
+                          ) : null;
+                        })
+                      ) : inv.track ? (
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full" style={{ backgroundColor: (inv.track.color || "#7C3AED") + "15", color: inv.track.color || "#7C3AED" }}>
                           {inv.track.nameAr}
                         </span>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -447,8 +459,25 @@ export default function JudgesPage() {
                   {judge.status === "APPROVED" ? "معتمد" : "قيد المراجعة"}
                 </span>
 
-                {/* Track badge */}
-                {judge.track && (
+                {/* Track badges */}
+                {judge.trackIds && judge.trackIds.length > 0 ? (
+                  judge.trackIds.map(tid => {
+                    const t = tracks.find(tr => tr.id === tid);
+                    return t ? (
+                      <span
+                        key={tid}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
+                        style={{
+                          backgroundColor: (t.color || "#7C3AED") + "15",
+                          color: t.color || "#7C3AED",
+                        }}
+                      >
+                        <MapPin className="w-3 h-3" />
+                        {t.nameAr || t.name}
+                      </span>
+                    ) : null;
+                  })
+                ) : judge.track ? (
                   <span
                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
                     style={{
@@ -459,7 +488,7 @@ export default function JudgesPage() {
                     <MapPin className="w-3 h-3" />
                     {judge.track.nameAr || judge.track.name}
                   </span>
-                )}
+                ) : null}
               </div>
 
               {/* Track Selector */}
@@ -477,10 +506,12 @@ export default function JudgesPage() {
                       <MapPin className="w-3.5 h-3.5 text-gray-400" />
                       {updatingTrack === judge.id ? (
                         <span className="text-gray-400">جاري التحديث...</span>
+                      ) : (judge.trackIds && judge.trackIds.length > 0) ? (
+                        <span>{judge.trackIds.length} مسار</span>
                       ) : judge.track ? (
                         <span>{judge.track.nameAr || judge.track.name}</span>
                       ) : (
-                        <span className="text-gray-400">تحديد المسار</span>
+                        <span className="text-gray-400">تحديد المسارات</span>
                       )}
                     </span>
                     {updatingTrack === judge.id ? (
@@ -492,32 +523,40 @@ export default function JudgesPage() {
 
                   {openTrackDropdown === judge.id && (
                     <div
-                      className="absolute z-20 top-full mt-1 w-full bg-white rounded-lg border border-gray-200 shadow-lg py-1"
+                      className="absolute z-20 top-full mt-1 w-full bg-white rounded-lg border border-gray-200 shadow-lg p-2 space-y-1"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <button
-                        onClick={() => assignTrack(judge.id, null)}
-                        className={`w-full text-right px-3 py-2 text-xs hover:bg-gray-50 transition-colors ${
-                          !judge.trackId ? "text-brand-600 font-medium bg-brand-50" : "text-gray-600"
-                        }`}
-                      >
-                        بدون مسار
-                      </button>
-                      {tracks.map(t => (
-                        <button
-                          key={t.id}
-                          onClick={() => assignTrack(judge.id, t.id)}
-                          className={`w-full text-right px-3 py-2 text-xs hover:bg-gray-50 transition-colors flex items-center gap-2 ${
-                            judge.trackId === t.id ? "text-brand-600 font-medium bg-brand-50" : "text-gray-600"
-                          }`}
-                        >
-                          <span
-                            className="w-2 h-2 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: t.color || "#7C3AED" }}
-                          />
-                          {t.nameAr || t.name}
-                        </button>
-                      ))}
+                      {tracks.map(t => {
+                        const judgeTrackIds = judge.trackIds && judge.trackIds.length > 0
+                          ? judge.trackIds
+                          : (judge.trackId ? [judge.trackId] : []);
+                        const isSelected = judgeTrackIds.includes(t.id);
+                        return (
+                          <label
+                            key={t.id}
+                            className={`flex items-center gap-2 px-2 py-1.5 text-xs rounded-md cursor-pointer hover:bg-gray-50 transition-colors ${
+                              isSelected ? "text-brand-600 font-medium bg-brand-50" : "text-gray-600"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                const newIds = e.target.checked
+                                  ? [...judgeTrackIds, t.id]
+                                  : judgeTrackIds.filter(id => id !== t.id);
+                                assignTracks(judge.id, newIds);
+                              }}
+                              className="w-3.5 h-3.5 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+                            />
+                            <span
+                              className="w-2 h-2 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: t.color || "#7C3AED" }}
+                            />
+                            {t.nameAr || t.name}
+                          </label>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -615,7 +654,7 @@ export default function JudgesPage() {
                 onClick={() => {
                   setShowInviteModal(false);
                   setInviteEmail("");
-                  setInviteTrackId("");
+                  setInviteTrackIds([]);
                   setInviteError("");
                   setInviteSuccess("");
                   setLastAcceptUrl("");
@@ -675,17 +714,32 @@ export default function JudgesPage() {
 
               {tracks.length > 0 && (
                 <div>
-                  <label className="text-xs text-gray-500 mb-1 block">المسار (اختياري)</label>
-                  <select
-                    value={inviteTrackId}
-                    onChange={(e) => setInviteTrackId(e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-200"
-                  >
-                    <option value="">بدون تحديد مسار</option>
+                  <label className="text-xs text-gray-500 mb-1.5 block">المسارات (اختياري)</label>
+                  <div className="space-y-1.5 bg-gray-50 border border-gray-200 rounded-xl p-3">
                     {tracks.map(t => (
-                      <option key={t.id} value={t.id}>{t.nameAr || t.name}</option>
+                      <label key={t.id} className="flex items-center gap-2.5 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          checked={inviteTrackIds.includes(t.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setInviteTrackIds(prev => [...prev, t.id]);
+                            } else {
+                              setInviteTrackIds(prev => prev.filter(id => id !== t.id));
+                            }
+                          }}
+                          className="w-4 h-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+                        />
+                        <span
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: t.color || "#7C3AED" }}
+                        />
+                        <span className="text-sm text-gray-600 group-hover:text-elm-navy transition-colors">
+                          {t.nameAr || t.name}
+                        </span>
+                      </label>
                     ))}
-                  </select>
+                  </div>
                 </div>
               )}
 
