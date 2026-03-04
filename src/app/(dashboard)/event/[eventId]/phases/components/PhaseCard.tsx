@@ -4,9 +4,7 @@ import { useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
-  Calendar,
   Users,
-  Trophy,
   AlertTriangle,
   Target,
   Edit3,
@@ -18,9 +16,10 @@ import {
   UserX,
   Zap,
   FileText,
+  Trophy,
 } from "lucide-react";
 import type { Phase, PhaseStatus } from "./types";
-import { phaseTypeIcons, statusConfig, evaluationMethodLabels } from "./constants";
+import { phaseTypeIcons, statusConfig } from "./constants";
 import OverviewTab from "./OverviewTab";
 import CriteriaTab from "./CriteriaTab";
 import JudgingTab from "./JudgingTab";
@@ -54,7 +53,15 @@ export default function PhaseCard({
   const StatusIcon = statusCfg.icon;
 
   const showAutoFilter = phase.evaluationMethod === "AI_AUTO";
-  const showJudging = phase.evaluationMethod === "JUDGE_MANUAL" || phase.evaluationMethod === "COMBINED";
+  const showJudging =
+    phase.evaluationMethod === "JUDGE_MANUAL" || phase.evaluationMethod === "COMBINED";
+
+  // Status-based card styles
+  const cardStyles: Record<string, string> = {
+    ACTIVE: "border-r-4 border-r-emerald-400 bg-white shadow-sm",
+    COMPLETED: "border border-gray-200 bg-gray-50/50",
+    UPCOMING: "border border-dashed border-gray-200 bg-white",
+  };
 
   const tabs: { key: TabKey; label: string; icon: any; show: boolean }[] = [
     { key: "overview", label: "نظرة عامة", icon: BarChart3, show: true },
@@ -66,22 +73,46 @@ export default function PhaseCard({
   ];
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className={`rounded-2xl overflow-hidden transition-all ${cardStyles[phase.status]}`}>
       {/* Phase Header */}
       <div
-        className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50/50 transition-colors"
+        className={`flex items-center justify-between px-6 py-4 cursor-pointer transition-colors ${
+          phase.status === "COMPLETED" ? "hover:bg-gray-100/50" : "hover:bg-gray-50/50"
+        }`}
         onClick={onToggle}
       >
         <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-brand-50 rounded-xl flex items-center justify-center">
-            <PhaseIcon className="w-5 h-5 text-brand-500" />
+          <div
+            className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              phase.status === "ACTIVE"
+                ? "bg-emerald-50"
+                : phase.status === "COMPLETED"
+                ? "bg-blue-50"
+                : "bg-gray-100"
+            }`}
+          >
+            <PhaseIcon
+              className={`w-5 h-5 ${
+                phase.status === "ACTIVE"
+                  ? "text-emerald-500"
+                  : phase.status === "COMPLETED"
+                  ? "text-blue-400"
+                  : "text-gray-400"
+              }`}
+            />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
                 المرحلة {phase.phaseNumber}
               </span>
-              <h3 className="text-sm font-bold text-elm-navy">{phase.nameAr}</h3>
+              <h3
+                className={`text-sm font-bold ${
+                  phase.status === "COMPLETED" ? "text-gray-500" : "text-elm-navy"
+                }`}
+              >
+                {phase.nameAr}
+              </h3>
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusCfg.color}`}>
                 <StatusIcon className="w-3 h-3 inline ml-1" />
                 {statusCfg.label}
@@ -89,28 +120,18 @@ export default function PhaseCard({
               {phase.isElimination && (
                 <span className="text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
                   <AlertTriangle className="w-3 h-3" />
-                  مرحلة تصفية
-                </span>
-              )}
-              {phase.evaluationMethod && (
-                <span className="text-[10px] bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full font-medium">
-                  {evaluationMethodLabels[phase.evaluationMethod]}
+                  تصفية
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-4 mt-1">
-              <span className="text-[11px] text-gray-400 flex items-center gap-1">
-                <Calendar className="w-3 h-3" />
-                {new Date(phase.startDate).toLocaleDateString("ar-SA")} &larr;{" "}
-                {new Date(phase.endDate).toLocaleDateString("ar-SA")}
-              </span>
+            <div className="flex items-center gap-3 mt-1">
               <span className="text-[11px] text-gray-400 flex items-center gap-1">
                 <Users className="w-3 h-3" />
                 {phase.totalParticipants} فريق
               </span>
-              <span className="text-[11px] text-gray-400">
-                {phase.criteria.length} معيار تقييم
-              </span>
+              {phase.criteria.length > 0 && (
+                <span className="text-[11px] text-gray-400">{phase.criteria.length} معيار</span>
+              )}
             </div>
           </div>
         </div>
@@ -129,7 +150,10 @@ export default function PhaseCard({
           )}
           {phase.status === "UPCOMING" && (
             <button
-              onClick={(e) => { e.stopPropagation(); onStatusChange(phase.id, "ACTIVE"); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onStatusChange(phase.id, "ACTIVE");
+              }}
               className="px-3 py-1.5 bg-emerald-50 text-emerald-600 text-[10px] font-bold rounded-lg hover:bg-emerald-100 transition-colors flex items-center gap-1"
             >
               <Play className="w-3 h-3" /> تفعيل
@@ -137,7 +161,10 @@ export default function PhaseCard({
           )}
           {phase.status === "ACTIVE" && (
             <button
-              onClick={(e) => { e.stopPropagation(); onStatusChange(phase.id, "COMPLETED"); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onStatusChange(phase.id, "COMPLETED");
+              }}
               className="px-3 py-1.5 bg-blue-50 text-blue-600 text-[10px] font-bold rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1"
             >
               <CheckCircle className="w-3 h-3" /> إكمال
@@ -145,13 +172,19 @@ export default function PhaseCard({
           )}
           <div className="flex items-center gap-1">
             <button
-              onClick={(e) => { e.stopPropagation(); onEdit(phase); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(phase);
+              }}
               className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400"
             >
               <Edit3 className="w-3.5 h-3.5" />
             </button>
             <button
-              onClick={(e) => { e.stopPropagation(); onDelete(phase); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(phase);
+              }}
               className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -167,19 +200,23 @@ export default function PhaseCard({
 
       {/* Expanded Content */}
       {isExpanded && (
-        <div className="border-t border-gray-100">
-          {/* Tabs */}
-          <div className="flex items-center gap-0 px-6 border-b border-gray-100 overflow-x-auto">
+        <div
+          className={`border-t ${
+            phase.status === "COMPLETED" ? "border-gray-200" : "border-gray-100"
+          }`}
+        >
+          {/* Tabs - pill style */}
+          <div className="flex items-center gap-1 px-6 py-2 border-b border-gray-100 overflow-x-auto">
             {tabs
               .filter((t) => t.show)
               .map((tab) => (
                 <button
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
-                  className={`flex items-center gap-2 px-4 py-3 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
                     activeTab === tab.key
-                      ? "border-brand-500 text-brand-600"
-                      : "border-transparent text-gray-400 hover:text-gray-600"
+                      ? "bg-brand-50 text-brand-600"
+                      : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
                   }`}
                 >
                   <tab.icon className="w-3.5 h-3.5" />
@@ -191,11 +228,21 @@ export default function PhaseCard({
           {/* Tab Content */}
           <div className="p-6">
             {activeTab === "overview" && <OverviewTab phase={phase} />}
-            {activeTab === "criteria" && <CriteriaTab phase={phase} eventId={eventId} onRefresh={onRefresh} />}
-            {activeTab === "judging" && showJudging && <JudgingTab phase={phase} eventId={eventId} onRefresh={onRefresh} />}
-            {activeTab === "results" && <ResultsTab phase={phase} eventId={eventId} onRefresh={onRefresh} />}
-            {activeTab === "autofilter" && showAutoFilter && <AutoFilterTab phase={phase} eventId={eventId} onRefresh={onRefresh} />}
-            {activeTab === "deliverables" && <DeliverablesTab phase={phase} eventId={eventId} onRefresh={onRefresh} />}
+            {activeTab === "criteria" && (
+              <CriteriaTab phase={phase} eventId={eventId} onRefresh={onRefresh} />
+            )}
+            {activeTab === "judging" && showJudging && (
+              <JudgingTab phase={phase} eventId={eventId} onRefresh={onRefresh} />
+            )}
+            {activeTab === "results" && (
+              <ResultsTab phase={phase} eventId={eventId} onRefresh={onRefresh} />
+            )}
+            {activeTab === "autofilter" && showAutoFilter && (
+              <AutoFilterTab phase={phase} eventId={eventId} onRefresh={onRefresh} />
+            )}
+            {activeTab === "deliverables" && (
+              <DeliverablesTab phase={phase} eventId={eventId} onRefresh={onRefresh} />
+            )}
           </div>
         </div>
       )}

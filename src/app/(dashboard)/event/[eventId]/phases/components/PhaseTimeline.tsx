@@ -1,56 +1,57 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
+import { Check } from "lucide-react";
 import type { Phase } from "./types";
-import { statusConfig } from "./constants";
 
 export default function PhaseTimeline({ phases }: { phases: Phase[] }) {
   return (
-    <div className="flex items-center gap-0 overflow-x-auto pb-2">
+    <div className="flex items-center w-full overflow-x-auto pb-1">
       {phases.map((phase, idx) => {
-        const StatusIcon = statusConfig[phase.status].icon;
+        const isActive = phase.status === "ACTIVE";
+        const isCompleted = phase.status === "COMPLETED";
+        const isLast = idx === phases.length - 1;
+
         return (
-          <div key={phase.id} className="flex items-center">
-            <div
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl border ${
-                phase.status === "ACTIVE"
-                  ? "bg-emerald-50 border-emerald-200 shadow-sm"
-                  : phase.status === "COMPLETED"
-                  ? "bg-blue-50 border-blue-200"
-                  : "bg-gray-50 border-gray-200"
-              }`}
-            >
-              <StatusIcon
-                className={`w-4 h-4 ${
-                  phase.status === "ACTIVE"
-                    ? "text-emerald-600"
-                    : phase.status === "COMPLETED"
-                    ? "text-blue-600"
-                    : "text-gray-400"
+          <div key={phase.id} className="flex items-center flex-1 min-w-0">
+            {/* Step */}
+            <div className="flex flex-col items-center gap-1.5 min-w-fit">
+              {/* Dot */}
+              <div
+                className={`relative w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
+                  isCompleted
+                    ? "bg-blue-500 text-white"
+                    : isActive
+                    ? "bg-emerald-500 text-white ring-4 ring-emerald-100"
+                    : "bg-gray-200 text-gray-500"
                 }`}
-              />
+              >
+                {isCompleted ? <Check className="w-3.5 h-3.5" /> : phase.phaseNumber}
+              </div>
+              {/* Label */}
               <div className="text-center">
-                <p className="text-[10px] text-gray-400">المرحلة {phase.phaseNumber}</p>
                 <p
-                  className={`text-xs font-bold ${
-                    phase.status === "ACTIVE"
-                      ? "text-emerald-700"
-                      : phase.status === "COMPLETED"
-                      ? "text-blue-700"
-                      : "text-gray-500"
+                  className={`text-[10px] font-medium whitespace-nowrap ${
+                    isActive
+                      ? "text-emerald-700 font-bold"
+                      : isCompleted
+                      ? "text-blue-600"
+                      : "text-gray-400"
                   }`}
                 >
                   {phase.nameAr}
                 </p>
+                {phase.isElimination && (
+                  <span className="text-[8px] text-red-500 font-bold">تصفية</span>
+                )}
               </div>
-              {phase.isElimination && (
-                <span className="text-[9px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full font-bold">
-                  تصفية
-                </span>
-              )}
             </div>
-            {idx < phases.length - 1 && (
-              <ArrowLeft className="w-5 h-5 text-gray-300 mx-1 flex-shrink-0" />
+            {/* Connector */}
+            {!isLast && (
+              <div
+                className={`flex-1 h-0.5 mx-2 min-w-[20px] self-start mt-[14px] ${
+                  isCompleted ? "bg-blue-300" : "bg-gray-200"
+                }`}
+              />
             )}
           </div>
         );
