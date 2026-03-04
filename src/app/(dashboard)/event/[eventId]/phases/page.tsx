@@ -56,6 +56,8 @@ type EvaluationMethod = "AI_AUTO" | "JUDGE_MANUAL" | "COMBINED" | "MENTOR_REVIEW
 
 type AdvancementMode = "PER_TRACK" | "OVERALL";
 
+type QualificationMode = "SCORE_BASED" | "ADVANCE_ALL" | "MANUAL";
+
 interface PhaseCriteria {
   id: string;
   name: string;
@@ -115,6 +117,8 @@ interface Phase {
   advancePercent: number | null;
   evaluationMethod: EvaluationMethod | null;
   advancementMode: AdvancementMode;
+  judgesPerTeam: number;
+  qualificationMode: QualificationMode;
   autoFilterRules: { rules: AutoFilterRule[] } | null;
   deliverableConfig: DeliverableConfig | null;
   criteria: PhaseCriteria[];
@@ -184,6 +188,12 @@ const evaluationMethodLabels: Record<EvaluationMethod, string> = {
 const advancementModeLabels: Record<AdvancementMode, string> = {
   PER_TRACK: "لكل مسار",
   OVERALL: "شامل",
+};
+
+const qualificationModeLabels: Record<QualificationMode, string> = {
+  SCORE_BASED: "بناءً على الدرجات",
+  ADVANCE_ALL: "تأهل الجميع (100%)",
+  MANUAL: "تأهل يدوي",
 };
 
 const phaseTypeIcons: Record<PhaseType, any> = {
@@ -327,18 +337,20 @@ function PhaseCard({
   onDelete: (phase: Phase) => void;
   onStatusChange: (phaseId: string, status: PhaseStatus) => void;
 }) {
-  type TabKey = "overview" | "criteria" | "results" | "autofilter" | "deliverable-config" | "deliverables";
+  type TabKey = "overview" | "criteria" | "judging" | "results" | "autofilter" | "deliverable-config" | "deliverables";
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const PhaseIcon = phaseTypeIcons[phase.phaseType];
   const statusCfg = statusConfig[phase.status];
   const StatusIcon = statusCfg.icon;
 
   const showAutoFilter = phase.evaluationMethod === "AI_AUTO";
+  const showJudging = phase.evaluationMethod === "JUDGE_MANUAL" || phase.evaluationMethod === "COMBINED";
 
   const tabs: { key: TabKey; label: string; icon: any; show: boolean }[] = [
     { key: "overview", label: "نظرة عامة", icon: BarChart3, show: true },
     { key: "criteria", label: "معايير التقييم", icon: Target, show: true },
-    { key: "results", label: "النتائج والتصفية", icon: Trophy, show: true },
+    { key: "judging", label: "التحكيم", icon: UserCheck, show: showJudging },
+    { key: "results", label: "النتائج والتأهيل", icon: Trophy, show: true },
     { key: "autofilter", label: "التصفية التلقائية", icon: Zap, show: showAutoFilter },
     { key: "deliverable-config", label: "إعدادات التسليمات", icon: Settings, show: true },
     { key: "deliverables", label: "التسليمات", icon: FileText, show: true },
@@ -479,6 +491,9 @@ function PhaseCard({
             {activeTab === "criteria" && (
               <CriteriaTab phase={phase} eventId={eventId} onRefresh={onRefresh} />
             )}
+            {activeTab === "judging" && showJudging && (
+              <JudgingTab phase={phase} eventId={eventId} onRefresh={onRefresh} />
+            )}
             {activeTab === "results" && (
               <ResultsTab phase={phase} eventId={eventId} onRefresh={onRefresh} />
             )}
@@ -560,15 +575,17 @@ function OverviewTab({ phase }: { phase: Phase }) {
             </p>
             <p className="text-[11px] text-amber-600 mt-1">طريقة التقييم</p>
           </div>
-          <div className="bg-gray-50 rounded-xl p-4 text-center">
-            <p className="text-2xl font-bold text-elm-navy">
-              {phase.advancementMode ? advancementModeLabels[phase.advancementMode] : "—"}
+          <div className="bg-blue-50 rounded-xl p-4 text-center">
+            <p className="text-2xl font-bold text-blue-700">
+              {qualificationModeLabels[phase.qualificationMode] || "بالدرجات"}
             </p>
-            <p className="text-[11px] text-gray-500 mt-1">وضع التأهل</p>
+            <p className="text-[11px] text-blue-600 mt-1">نمط التأهل</p>
           </div>
-          <div className="bg-gray-50 rounded-xl p-4 text-center">
-            <p className="text-2xl font-bold text-elm-navy">—</p>
-            <p className="text-[11px] text-gray-500 mt-1">لا تصفية</p>
+          <div className="bg-cyan-50 rounded-xl p-4 text-center">
+            <p className="text-2xl font-bold text-cyan-700">
+              {phase.judgesPerTeam || 1}
+            </p>
+            <p className="text-[11px] text-cyan-600 mt-1">محكم لكل فريق</p>
           </div>
         </>
       )}
@@ -832,11 +849,16 @@ function ResultsTab({
   const [eliminationPreview, setEliminationPreview] = useState<{
     advancing: EliminationTeam[];
     eliminated: EliminationTeam[];
+    teams?: { teamId: string; teamName: string; trackId: string | null; avgScore: number; evaluationCount: number }[];
     stats: { total: number; advancing: number; eliminated: number };
     phase: any;
   } | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [executing, setExecuting] = useState(false);
+  // Manual mode: selected team IDs
+  const [selectedAdvancing, setSelectedAdvancing] = useState<Set<string>>(new Set());
+
+  const qualMode = phase.qualificationMode || "SCORE_BASED";
 
   const handlePreviewElimination = async () => {
     setLoadingPreview(true);
@@ -846,6 +868,10 @@ function ResultsTab({
       const data = await res.json();
       setEliminationPreview(data);
       setShowEliminationPreview(true);
+      // For MANUAL mode, pre-select all teams by default
+      if (qualMode === "MANUAL" && data.teams) {
+        setSelectedAdvancing(new Set(data.teams.map((t: any) => t.teamId)));
+      }
     } catch (err) {
       console.error("Failed to preview elimination:", err);
       alert("فشل تحميل معاينة التصفية");
@@ -855,30 +881,119 @@ function ResultsTab({
   };
 
   const handleExecuteElimination = async () => {
-    if (!confirm("هل أنت متأكد من تنفيذ التصفية؟ لا يمكن التراجع عن هذا الإجراء.")) return;
+    if (!confirm("هل أنت متأكد من تنفيذ التأهيل؟ لا يمكن التراجع عن هذا الإجراء.")) return;
     setExecuting(true);
     try {
+      let bodyData: any = undefined;
+      let headers: any = {};
+
+      if (qualMode === "MANUAL" && eliminationPreview?.teams) {
+        const allTeamIds = eliminationPreview.teams.map((t: any) => t.teamId);
+        const advancingIds = Array.from(selectedAdvancing);
+        const eliminatedIds = allTeamIds.filter((id: string) => !selectedAdvancing.has(id));
+        bodyData = JSON.stringify({ advancingIds, eliminatedIds });
+        headers["Content-Type"] = "application/json";
+      }
+
       const res = await fetch(`/api/events/${eventId}/phases/${phase.id}/eliminate`, {
         method: "POST",
+        headers,
+        ...(bodyData && { body: bodyData }),
       });
-      if (!res.ok) throw new Error("فشل تنفيذ التصفية");
+      if (!res.ok) throw new Error("فشل تنفيذ التأهيل");
       const data = await res.json();
-      alert(`تم تنفيذ التصفية بنجاح: ${data.advanced} متأهل، ${data.eliminated} مستبعد`);
+      alert(`تم التنفيذ بنجاح: ${data.advanced} متأهل، ${data.eliminated} مستبعد`);
       setShowEliminationPreview(false);
       setEliminationPreview(null);
       onRefresh();
     } catch (err) {
       console.error("Failed to execute elimination:", err);
-      alert("فشل تنفيذ التصفية");
+      alert("فشل تنفيذ التأهيل");
     } finally {
       setExecuting(false);
     }
   };
 
+  const toggleTeamSelection = (teamId: string) => {
+    setSelectedAdvancing((prev) => {
+      const next = new Set(prev);
+      if (next.has(teamId)) {
+        next.delete(teamId);
+      } else {
+        next.add(teamId);
+      }
+      return next;
+    });
+  };
+
+  const selectAllTeams = () => {
+    if (eliminationPreview?.teams) {
+      setSelectedAdvancing(new Set(eliminationPreview.teams.map((t: any) => t.teamId)));
+    }
+  };
+
+  const deselectAllTeams = () => {
+    setSelectedAdvancing(new Set());
+  };
+
   return (
     <div className="space-y-4">
-      {/* Elimination Controls */}
-      {phase.isElimination && phase.status === "ACTIVE" && (
+      {/* ── ADVANCE_ALL Mode Banner ── */}
+      {qualMode === "ADVANCE_ALL" && phase.status === "ACTIVE" && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <CheckCircle className="w-5 h-5 text-emerald-600" />
+            <div>
+              <p className="text-sm font-bold text-emerald-800">تأهل الجميع</p>
+              <p className="text-[11px] text-emerald-600">
+                جميع الفرق ستتأهل تلقائياً للمرحلة التالية
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handlePreviewElimination}
+            disabled={loadingPreview}
+            className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl hover:bg-emerald-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+          >
+            {loadingPreview ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <UserCheck className="w-3.5 h-3.5" />
+            )}
+            تأهيل جميع الفرق
+          </button>
+        </div>
+      )}
+
+      {/* ── MANUAL Mode Banner ── */}
+      {qualMode === "MANUAL" && phase.status === "ACTIVE" && (
+        <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <UserCheck className="w-5 h-5 text-purple-600" />
+            <div>
+              <p className="text-sm font-bold text-purple-800">تأهل يدوي</p>
+              <p className="text-[11px] text-purple-600">
+                اختر الفرق المتأهلة يدوياً بناءً على تقييمك
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handlePreviewElimination}
+            disabled={loadingPreview}
+            className="px-4 py-2 bg-purple-600 text-white text-xs font-bold rounded-xl hover:bg-purple-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+          >
+            {loadingPreview ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Eye className="w-3.5 h-3.5" />
+            )}
+            عرض الفرق للتأهيل
+          </button>
+        </div>
+      )}
+
+      {/* ── SCORE_BASED Mode Banner (existing) ── */}
+      {qualMode === "SCORE_BASED" && phase.isElimination && phase.status === "ACTIVE" && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-600" />
@@ -974,8 +1089,197 @@ function ResultsTab({
         </table>
       </div>
 
-      {/* Elimination Preview Modal */}
-      {showEliminationPreview && eliminationPreview && (
+      {/* ── ADVANCE_ALL Preview Modal ── */}
+      {showEliminationPreview && eliminationPreview && qualMode === "ADVANCE_ALL" && (
+        <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="text-sm font-bold text-elm-navy">تأهيل جميع الفرق</h3>
+              <button
+                onClick={() => setShowEliminationPreview(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100"
+              >
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+
+            <div className="px-6 py-6 text-center">
+              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="w-8 h-8 text-emerald-600" />
+              </div>
+              <p className="text-lg font-bold text-elm-navy mb-2">
+                {eliminationPreview.stats.total} فريق سيتأهلون
+              </p>
+              <p className="text-sm text-gray-500">
+                سيتم تأهيل جميع الفرق المسجلة للمرحلة التالية
+              </p>
+            </div>
+
+            <div className="px-6 pb-4 max-h-[200px] overflow-y-auto space-y-1">
+              {eliminationPreview.advancing.map((t, i) => (
+                <div key={t.teamId} className="flex items-center justify-between bg-emerald-50/50 rounded-lg px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 w-5 h-5 rounded-full flex items-center justify-center">
+                      {i + 1}
+                    </span>
+                    <span className="text-xs font-medium text-elm-navy">{t.teamName}</span>
+                  </div>
+                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
+              <button
+                onClick={() => setShowEliminationPreview(false)}
+                className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-xl transition-colors"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={handleExecuteElimination}
+                disabled={executing}
+                className="px-6 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                {executing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CheckCircle className="w-4 h-4" />
+                )}
+                تأهيل الجميع
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MANUAL Mode Modal ── */}
+      {showEliminationPreview && eliminationPreview && qualMode === "MANUAL" && (
+        <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="text-sm font-bold text-elm-navy">اختيار الفرق المتأهلة</h3>
+              <button
+                onClick={() => setShowEliminationPreview(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100"
+              >
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+
+            {/* Summary Stats */}
+            <div className="grid grid-cols-3 gap-4 px-6 py-4">
+              <div className="bg-gray-50 rounded-xl p-3 text-center">
+                <p className="text-xl font-bold text-elm-navy">{eliminationPreview.teams?.length || 0}</p>
+                <p className="text-[10px] text-gray-500">إجمالي الفرق</p>
+              </div>
+              <div className="bg-emerald-50 rounded-xl p-3 text-center">
+                <p className="text-xl font-bold text-emerald-700">{selectedAdvancing.size}</p>
+                <p className="text-[10px] text-emerald-600">سيتأهلون</p>
+              </div>
+              <div className="bg-red-50 rounded-xl p-3 text-center">
+                <p className="text-xl font-bold text-red-600">{(eliminationPreview.teams?.length || 0) - selectedAdvancing.size}</p>
+                <p className="text-[10px] text-red-500">سيُستبعدون</p>
+              </div>
+            </div>
+
+            {/* Select/Deselect All */}
+            <div className="flex items-center gap-2 px-6 pb-2">
+              <button
+                onClick={selectAllTeams}
+                className="text-[11px] text-brand-600 hover:text-brand-700 font-medium"
+              >
+                تحديد الكل
+              </button>
+              <span className="text-gray-300">|</span>
+              <button
+                onClick={deselectAllTeams}
+                className="text-[11px] text-gray-500 hover:text-gray-700 font-medium"
+              >
+                إلغاء تحديد الكل
+              </button>
+            </div>
+
+            {/* Teams Checklist */}
+            <div className="px-6 pb-4 max-h-[350px] overflow-y-auto space-y-1">
+              {(eliminationPreview.teams || []).map((t: any, idx: number) => {
+                const isSelected = selectedAdvancing.has(t.teamId);
+                return (
+                  <div
+                    key={t.teamId}
+                    onClick={() => toggleTeamSelection(t.teamId)}
+                    className={`flex items-center justify-between rounded-xl px-4 py-3 cursor-pointer border transition-colors ${
+                      isSelected
+                        ? "bg-emerald-50/50 border-emerald-200"
+                        : "bg-red-50/30 border-red-100"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
+                        isSelected
+                          ? "bg-emerald-500 border-emerald-500"
+                          : "border-gray-300 bg-white"
+                      }`}>
+                        {isSelected && <Check className="w-3 h-3 text-white" />}
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-elm-navy">{t.teamName}</span>
+                        {t.evaluationCount > 0 && (
+                          <span className="text-[10px] text-gray-400 mr-2">
+                            ({t.evaluationCount} تقييم)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {t.avgScore > 0 && (
+                        <span className="text-xs font-bold text-elm-navy">{t.avgScore.toFixed(1)}%</span>
+                      )}
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        isSelected
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-red-100 text-red-600"
+                      }`}>
+                        {isSelected ? "متأهل" : "مستبعد"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
+              <p className="text-[11px] text-gray-500">
+                {selectedAdvancing.size} فريق متأهل من أصل {eliminationPreview.teams?.length || 0}
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowEliminationPreview(false)}
+                  className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-xl transition-colors"
+                >
+                  إلغاء
+                </button>
+                <button
+                  onClick={handleExecuteElimination}
+                  disabled={executing || selectedAdvancing.size === 0}
+                  className="px-6 py-2 bg-purple-600 text-white text-sm font-bold rounded-xl hover:bg-purple-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  {executing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <UserCheck className="w-4 h-4" />
+                  )}
+                  تنفيذ التأهيل
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── SCORE_BASED Elimination Preview Modal ── */}
+      {showEliminationPreview && eliminationPreview && qualMode === "SCORE_BASED" && (
         <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
@@ -1067,6 +1371,323 @@ function ResultsTab({
               </button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Judging Tab ────────────────────────────────────────────
+function JudgingTab({
+  phase,
+  eventId,
+  onRefresh,
+}: {
+  phase: Phase;
+  eventId: string;
+  onRefresh: () => void;
+}) {
+  const [distributions, setDistributions] = useState<any[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [assignments, setAssignments] = useState<any[]>([]);
+  const [evaluationData, setEvaluationData] = useState<any>(null);
+  const [loadingDist, setLoadingDist] = useState(false);
+  const [loadingEvals, setLoadingEvals] = useState(true);
+  const [executing, setExecuting] = useState(false);
+  const [hasDistributed, setHasDistributed] = useState(false);
+
+  // Fetch existing assignments + evaluations on mount
+  useEffect(() => {
+    fetchExistingData();
+  }, []);
+
+  const fetchExistingData = async () => {
+    setLoadingEvals(true);
+    try {
+      const [assignRes, evalRes] = await Promise.all([
+        fetch(`/api/events/${eventId}/distribute?phaseId=${phase.id}`),
+        fetch(`/api/events/${eventId}/evaluations?phaseId=${phase.id}`),
+      ]);
+
+      // Check if already distributed by looking for existing assignments
+      const assignData = assignRes.ok ? await assignRes.json() : null;
+      if (assignData) {
+        setDistributions(assignData.distributions || []);
+        setWarnings(assignData.warnings || []);
+      }
+
+      const evalData = evalRes.ok ? await evalRes.json() : null;
+      if (evalData) {
+        setEvaluationData(evalData);
+      }
+
+      // Check if there are actual assignments in DB
+      // Use assignments from phases API data
+      setHasDistributed(phase.assignments && phase.assignments.length > 0);
+    } catch {
+      // silently fail
+    } finally {
+      setLoadingEvals(false);
+    }
+  };
+
+  const handlePreview = async () => {
+    setLoadingDist(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}/distribute?phaseId=${phase.id}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setDistributions(data.distributions || []);
+      setWarnings(data.warnings || []);
+    } catch {
+      alert("فشل تحميل معاينة التوزيع");
+    } finally {
+      setLoadingDist(false);
+    }
+  };
+
+  const handleExecute = async () => {
+    if (!confirm("هل أنت متأكد من تنفيذ توزيع المحكمين؟")) return;
+    setExecuting(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}/distribute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phaseId: phase.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "فشل تنفيذ التوزيع");
+        return;
+      }
+      const data = await res.json();
+      alert(`تم التوزيع بنجاح: ${data.created} تعيين`);
+      setHasDistributed(true);
+      onRefresh();
+      fetchExistingData();
+    } catch {
+      alert("فشل تنفيذ التوزيع");
+    } finally {
+      setExecuting(false);
+    }
+  };
+
+  if (loadingEvals) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-6 h-6 text-brand-500 animate-spin" />
+      </div>
+    );
+  }
+
+  const teamAverages = evaluationData?.teamAverages || [];
+  const stats = evaluationData?.stats || {};
+  const criteria = evaluationData?.criteria || [];
+  const evaluations = evaluationData?.evaluations || [];
+
+  return (
+    <div className="space-y-6">
+      {/* Distribution Controls */}
+      <div className="bg-brand-50/50 border border-brand-100 rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h4 className="text-sm font-bold text-elm-navy">توزيع المحكمين</h4>
+            <p className="text-[11px] text-gray-500">
+              كل فريق سيُقيّم من {phase.judgesPerTeam || 1} محكم
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePreview}
+              disabled={loadingDist}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-brand-200 text-brand-600 rounded-lg text-xs font-medium hover:bg-brand-50 transition-colors disabled:opacity-50"
+            >
+              {loadingDist ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
+              معاينة التوزيع
+            </button>
+            <button
+              onClick={handleExecute}
+              disabled={executing}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-500 text-white rounded-lg text-xs font-medium hover:bg-brand-600 transition-colors disabled:opacity-50"
+            >
+              {executing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              تنفيذ التوزيع
+            </button>
+          </div>
+        </div>
+
+        {/* Warnings */}
+        {warnings.length > 0 && (
+          <div className="space-y-1 mt-2">
+            {warnings.map((w, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-1.5">
+                <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                {w}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Distribution Preview */}
+        {distributions.length > 0 && (
+          <div className="mt-3 space-y-3">
+            {distributions.map((dist, idx) => (
+              <div key={idx} className="bg-white rounded-xl border border-gray-100 p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    {dist.trackColor && (
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: dist.trackColor }} />
+                    )}
+                    <span className="text-xs font-bold text-elm-navy">{dist.trackName}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-[10px] text-gray-500">
+                    <span>{dist.judges.length} محكم</span>
+                    <span>{dist.teams.length} فريق</span>
+                    <span>{dist.judgesPerTeam} محكم/فريق</span>
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded-lg overflow-hidden max-h-[200px] overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-[10px] text-gray-500 border-b border-gray-200">
+                        <th className="text-right px-3 py-2 font-medium">الفريق</th>
+                        <th className="text-right px-3 py-2 font-medium">المحكمون المعينون</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dist.teams.map((team: any) => {
+                        const teamAssignments = dist.assignments.filter((a: any) => a.teamId === team.id);
+                        return (
+                          <tr key={team.id} className="border-b border-gray-100 last:border-0">
+                            <td className="px-3 py-2 font-medium text-elm-navy">{team.name}</td>
+                            <td className="px-3 py-2">
+                              <div className="flex flex-wrap gap-1">
+                                {teamAssignments.map((a: any, i: number) => (
+                                  <span key={i} className="bg-brand-50 text-brand-600 px-2 py-0.5 rounded-full text-[10px] font-medium">
+                                    {a.judgeName}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Evaluation Progress */}
+      {hasDistributed && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-bold text-elm-navy">تقدم التقييم</h4>
+            {stats.totalAssignments > 0 && (
+              <div className="flex items-center gap-2">
+                <div className="w-32 h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 rounded-full transition-all"
+                    style={{ width: `${(stats.completedAssignments / stats.totalAssignments) * 100}%` }}
+                  />
+                </div>
+                <span className="text-xs text-gray-500">
+                  {stats.completedAssignments}/{stats.totalAssignments}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-4 gap-3 mb-4">
+            <div className="bg-gray-50 rounded-xl p-3 text-center">
+              <p className="text-lg font-bold text-elm-navy">{stats.totalTeams || 0}</p>
+              <p className="text-[10px] text-gray-500">الفرق</p>
+            </div>
+            <div className="bg-emerald-50 rounded-xl p-3 text-center">
+              <p className="text-lg font-bold text-emerald-700">{stats.evaluatedTeams || 0}</p>
+              <p className="text-[10px] text-emerald-600">تم تقييمها</p>
+            </div>
+            <div className="bg-brand-50 rounded-xl p-3 text-center">
+              <p className="text-lg font-bold text-brand-700">{stats.totalEvaluations || 0}</p>
+              <p className="text-[10px] text-brand-600">تقييمات</p>
+            </div>
+            <div className="bg-amber-50 rounded-xl p-3 text-center">
+              <p className="text-lg font-bold text-amber-700">{(stats.totalAssignments || 0) - (stats.completedAssignments || 0)}</p>
+              <p className="text-[10px] text-amber-600">بانتظار</p>
+            </div>
+          </div>
+
+          {/* Team Scores Table */}
+          {teamAverages.length > 0 && (
+            <div className="bg-gray-50 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-[11px] text-gray-500 border-b border-gray-200">
+                    <th className="text-right px-4 py-3 font-medium">#</th>
+                    <th className="text-right px-4 py-3 font-medium">الفريق</th>
+                    <th className="text-center px-4 py-3 font-medium">التقييمات</th>
+                    <th className="text-center px-4 py-3 font-medium">المتوسط</th>
+                    {criteria.map((c: any) => (
+                      <th key={c.id} className="text-center px-3 py-3 font-medium text-[10px]">
+                        {c.nameAr}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...teamAverages]
+                    .sort((a: any, b: any) => b.averageScore - a.averageScore)
+                    .map((team: any, idx: number) => {
+                      const teamEvals = evaluations.filter((e: any) => e.team?.id === team.teamId);
+                      return (
+                        <tr key={team.teamId} className="border-b border-gray-100 last:border-0">
+                          <td className="px-4 py-3 text-xs text-gray-400">{idx + 1}</td>
+                          <td className="px-4 py-3">
+                            <p className="text-xs font-medium text-elm-navy">{team.teamName}</p>
+                          </td>
+                          <td className="text-center px-4 py-3">
+                            <span className={`text-xs font-medium ${
+                              team.completedJudges >= team.assignedJudges && team.assignedJudges > 0
+                                ? "text-emerald-600"
+                                : "text-amber-600"
+                            }`}>
+                              {team.completedJudges}/{team.assignedJudges}
+                            </span>
+                          </td>
+                          <td className="text-center px-4 py-3">
+                            {team.evaluationCount > 0 ? (
+                              <span className="text-sm font-bold text-elm-navy">{team.averageScore.toFixed(1)}%</span>
+                            ) : (
+                              <span className="text-gray-300">&mdash;</span>
+                            )}
+                          </td>
+                          {criteria.map((c: any) => (
+                            <td key={c.id} className="text-center px-3 py-3 text-xs text-gray-600">
+                              {team.criteriaAverages[c.id] !== undefined
+                                ? team.criteriaAverages[c.id].toFixed(1)
+                                : "—"}
+                            </td>
+                          ))}
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* No distribution yet */}
+      {!hasDistributed && distributions.length === 0 && (
+        <div className="text-center py-12 bg-gray-50 rounded-xl">
+          <UserCheck className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+          <p className="text-sm font-bold text-elm-navy mb-1">لم يتم التوزيع بعد</p>
+          <p className="text-xs text-gray-500">اضغط على &quot;معاينة التوزيع&quot; لرؤية التوزيع المقترح</p>
         </div>
       )}
     </div>
@@ -1842,6 +2463,8 @@ function PhaseFormModal({
     advancePercent: phase?.advancePercent?.toString() || "",
     evaluationMethod: (phase?.evaluationMethod || "") as EvaluationMethod | "",
     advancementMode: (phase?.advancementMode || "OVERALL") as AdvancementMode,
+    judgesPerTeam: (phase?.judgesPerTeam || 1).toString(),
+    qualificationMode: (phase?.qualificationMode || "SCORE_BASED") as QualificationMode,
   });
 
   const [saving, setSaving] = useState(false);
@@ -1865,6 +2488,8 @@ function PhaseFormModal({
         advancePercent: form.advancePercent || null,
         evaluationMethod: form.evaluationMethod || null,
         advancementMode: form.advancementMode,
+        judgesPerTeam: parseInt(form.judgesPerTeam) || 1,
+        qualificationMode: form.qualificationMode,
       };
 
       if (isEdit) {
@@ -1976,6 +2601,38 @@ function PhaseFormModal({
                   </option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          {/* Qualification Mode + Judges Per Team */}
+          <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-blue-600 mb-1 block">نمط التأهل</label>
+                <select
+                  value={form.qualificationMode}
+                  onChange={(e) => setForm({ ...form, qualificationMode: e.target.value as QualificationMode })}
+                  className="w-full px-3 py-2 bg-white border border-blue-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                >
+                  {Object.entries(qualificationModeLabels).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </div>
+              {(form.evaluationMethod === "JUDGE_MANUAL" || form.evaluationMethod === "COMBINED") && (
+                <div>
+                  <label className="text-xs text-blue-600 mb-1 block">عدد المحكمين لكل فريق</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={form.judgesPerTeam}
+                    onChange={(e) => setForm({ ...form, judgesPerTeam: e.target.value })}
+                    className="w-full px-3 py-2 bg-white border border-blue-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    placeholder="2"
+                  />
+                </div>
+              )}
             </div>
           </div>
 

@@ -524,6 +524,9 @@ model EventPhase {
   // ── Evaluation method ────────────
   evaluationMethod EvaluationType? @map("evaluation_method")
   advancementMode  AdvancementMode @default(OVERALL) @map("advancement_mode")
+  // ── Judging config ─────────────
+  judgesPerTeam     Int               @default(1) @map("judges_per_team")
+  qualificationMode QualificationMode @default(SCORE_BASED) @map("qualification_mode")
   // ── Auto-filter rules ─────────
   autoFilterRules  Json?    @map("auto_filter_rules")
   // ── Deliverable config ─────────
@@ -1307,6 +1310,12 @@ enum RegistrationMode {
 enum AdvancementMode {
   PER_TRACK     // الأفضل من كل مسار
   OVERALL       // الأفضل من جميع المسارات
+}
+
+enum QualificationMode {
+  SCORE_BASED   // التأهل بناءً على الدرجات
+  ADVANCE_ALL   // تأهل الجميع 100%
+  MANUAL        // تأهل يدوي من المشرف
 }
 
 enum AssignmentStatus {

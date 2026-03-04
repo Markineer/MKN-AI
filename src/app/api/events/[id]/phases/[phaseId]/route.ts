@@ -21,6 +21,8 @@ export async function PUT(
     advancePercent,
     evaluationMethod,
     advancementMode,
+    judgesPerTeam,
+    qualificationMode,
     autoFilterRules,
     deliverableConfig,
   } = body;
@@ -47,6 +49,10 @@ export async function PUT(
         evaluationMethod: evaluationMethod || null,
       }),
       ...(advancementMode !== undefined && { advancementMode }),
+      ...(judgesPerTeam !== undefined && {
+        judgesPerTeam: parseInt(String(judgesPerTeam)) || 1,
+      }),
+      ...(qualificationMode !== undefined && { qualificationMode }),
       ...(autoFilterRules !== undefined && { autoFilterRules }),
       ...(deliverableConfig !== undefined && { deliverableConfig }),
     },

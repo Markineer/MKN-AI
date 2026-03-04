@@ -21,6 +21,7 @@ interface TrackDistribution {
   teams: { id: string; name: string }[];
   assignments: { judgeId: string; judgeName: string; teamId: string; teamName: string }[];
   teamsPerJudge: number;
+  judgesPerTeam: number;
 }
 
 // GET: preview distribution (dry run)
@@ -115,7 +116,60 @@ export async function POST(
   });
 }
 
+/**
+ * Balanced multi-judge distribution algorithm.
+ * Each team gets exactly N judges (judgesPerTeam from the phase).
+ * Judges are assigned by load-balancing (least-loaded judge first).
+ */
+function distributeJudges(
+  judges: { id: string; memberId: string; name: string }[],
+  teams: { id: string; name: string }[],
+  judgesPerTeam: number
+): { judgeId: string; judgeName: string; teamId: string; teamName: string }[] {
+  const assignments: { judgeId: string; judgeName: string; teamId: string; teamName: string }[] = [];
+
+  const n = Math.min(judgesPerTeam, judges.length);
+  if (n === 0 || teams.length === 0) return assignments;
+
+  // Track load per judge
+  const judgeLoad: Record<string, number> = {};
+  judges.forEach((j) => { judgeLoad[j.memberId] = 0; });
+
+  const shuffledTeams = shuffle(teams);
+
+  for (const team of shuffledTeams) {
+    // Sort judges by load (ascending), shuffle ties for fairness
+    const sorted = [...judges].sort((a, b) => {
+      const diff = (judgeLoad[a.memberId] || 0) - (judgeLoad[b.memberId] || 0);
+      if (diff !== 0) return diff;
+      return Math.random() - 0.5; // random tie-breaking
+    });
+
+    const selected = sorted.slice(0, n);
+
+    for (const judge of selected) {
+      assignments.push({
+        judgeId: judge.memberId,
+        judgeName: judge.name,
+        teamId: team.id,
+        teamName: team.name,
+      });
+      judgeLoad[judge.memberId] = (judgeLoad[judge.memberId] || 0) + 1;
+    }
+  }
+
+  return assignments;
+}
+
 async function buildDistribution(eventId: string, phaseId: string) {
+  // Fetch phase for judgesPerTeam
+  const phase = await prisma.eventPhase.findUnique({
+    where: { id: phaseId },
+    select: { judgesPerTeam: true },
+  });
+
+  const judgesPerTeam = phase?.judgesPerTeam || 1;
+
   // Fetch tracks
   const tracks = await prisma.eventTrack.findMany({
     where: { eventId, isActive: true },
@@ -142,52 +196,55 @@ async function buildDistribution(eventId: string, phaseId: string) {
   const warnings: string[] = [];
   const distributions: TrackDistribution[] = [];
 
+  // Helper to format judge info
+  const formatJudge = (j: typeof judges[0]) => ({
+    id: j.user.id,
+    memberId: j.id,
+    name: `${j.user.firstNameAr || j.user.firstName} ${j.user.lastNameAr || j.user.lastName}`.trim(),
+  });
+
   if (tracks.length === 0) {
     // No tracks — distribute all judges to all teams
     if (judges.length === 0) {
       warnings.push("لا يوجد محكمون معتمدون في الفعالية");
-      return { distributions, warnings };
+      return { distributions, warnings, judgesPerTeam };
     }
     if (teams.length === 0) {
       warnings.push("لا يوجد فرق مسجلة في الفعالية");
-      return { distributions, warnings };
+      return { distributions, warnings, judgesPerTeam };
     }
 
-    const shuffledTeams = shuffle(teams);
-    const assignments: TrackDistribution["assignments"] = [];
-
-    for (let i = 0; i < shuffledTeams.length; i++) {
-      const judge = judges[i % judges.length];
-      const judgeName = judge.user.firstNameAr || judge.user.firstName || "";
-      const judgeLastName = judge.user.lastNameAr || judge.user.lastName || "";
-      assignments.push({
-        judgeId: judge.id,
-        judgeName: `${judgeName} ${judgeLastName}`.trim(),
-        teamId: shuffledTeams[i].id,
-        teamName: shuffledTeams[i].nameAr || shuffledTeams[i].name,
-      });
+    if (judges.length < judgesPerTeam) {
+      warnings.push(`عدد المحكمين (${judges.length}) أقل من المطلوب لكل فريق (${judgesPerTeam}). سيتم تعيين ${judges.length} محكم لكل فريق.`);
     }
 
+    const judgeList = judges.map(formatJudge);
+    const teamList = teams.map((t) => ({ id: t.id, name: t.nameAr || t.name }));
+    const assignments = distributeJudges(judgeList, teamList, judgesPerTeam);
+
+    const effectiveN = Math.min(judgesPerTeam, judges.length);
     distributions.push({
       trackId: "",
       trackName: "جميع الفرق",
       trackColor: null,
-      judges: judges.map(j => ({
-        id: j.user.id,
-        memberId: j.id,
-        name: `${j.user.firstNameAr || j.user.firstName} ${j.user.lastNameAr || j.user.lastName}`.trim(),
-      })),
-      teams: teams.map(t => ({ id: t.id, name: t.nameAr || t.name })),
+      judges: judgeList,
+      teams: teamList,
       assignments,
-      teamsPerJudge: Math.ceil(teams.length / judges.length),
+      teamsPerJudge: Math.ceil((teams.length * effectiveN) / judges.length),
+      judgesPerTeam: effectiveN,
     });
   } else {
     // Per-track distribution
-    for (const track of tracks) {
-      const trackJudges = judges.filter(j => j.trackId === track.id);
-      const trackTeams = teams.filter(t => t.trackId === track.id);
+    // Judges with trackId=null can be assigned to any track
+    const globalJudges = judges.filter((j) => !j.trackId);
 
-      if (trackJudges.length === 0) {
+    for (const track of tracks) {
+      // Track-specific judges + global judges (no trackId)
+      const trackJudges = judges.filter((j) => j.trackId === track.id);
+      const availableJudges = [...trackJudges, ...globalJudges];
+      const trackTeams = teams.filter((t) => t.trackId === track.id);
+
+      if (availableJudges.length === 0) {
         warnings.push(`المسار "${track.nameAr || track.name}" لا يوجد فيه محكمون`);
         continue;
       }
@@ -196,42 +253,33 @@ async function buildDistribution(eventId: string, phaseId: string) {
         continue;
       }
 
-      const shuffledTeams = shuffle(trackTeams);
-      const assignments: TrackDistribution["assignments"] = [];
-
-      for (let i = 0; i < shuffledTeams.length; i++) {
-        const judge = trackJudges[i % trackJudges.length];
-        const judgeName = judge.user.firstNameAr || judge.user.firstName || "";
-        const judgeLastName = judge.user.lastNameAr || judge.user.lastName || "";
-        assignments.push({
-          judgeId: judge.id,
-          judgeName: `${judgeName} ${judgeLastName}`.trim(),
-          teamId: shuffledTeams[i].id,
-          teamName: shuffledTeams[i].nameAr || shuffledTeams[i].name,
-        });
+      if (availableJudges.length < judgesPerTeam) {
+        warnings.push(`المسار "${track.nameAr || track.name}": عدد المحكمين (${availableJudges.length}) أقل من المطلوب (${judgesPerTeam}).`);
       }
 
+      const judgeList = availableJudges.map(formatJudge);
+      const teamList = trackTeams.map((t) => ({ id: t.id, name: t.nameAr || t.name }));
+      const assignments = distributeJudges(judgeList, teamList, judgesPerTeam);
+
+      const effectiveN = Math.min(judgesPerTeam, availableJudges.length);
       distributions.push({
         trackId: track.id,
         trackName: track.nameAr || track.name,
         trackColor: track.color,
-        judges: trackJudges.map(j => ({
-          id: j.user.id,
-          memberId: j.id,
-          name: `${j.user.firstNameAr || j.user.firstName} ${j.user.lastNameAr || j.user.lastName}`.trim(),
-        })),
-        teams: trackTeams.map(t => ({ id: t.id, name: t.nameAr || t.name })),
+        judges: judgeList,
+        teams: teamList,
         assignments,
-        teamsPerJudge: Math.ceil(trackTeams.length / trackJudges.length),
+        teamsPerJudge: Math.ceil((trackTeams.length * effectiveN) / availableJudges.length),
+        judgesPerTeam: effectiveN,
       });
     }
 
     // Check for untracked teams
-    const untrackedTeams = teams.filter(t => !t.trackId);
+    const untrackedTeams = teams.filter((t) => !t.trackId);
     if (untrackedTeams.length > 0) {
       warnings.push(`يوجد ${untrackedTeams.length} فريق بدون مسار محدد`);
     }
   }
 
-  return { distributions, warnings };
+  return { distributions, warnings, judgesPerTeam };
 }

@@ -103,15 +103,36 @@ export async function GET(
     orderBy: { sortOrder: "asc" },
   });
 
+  // Get judge assignments for per-team completion stats
+  const assignmentFilter: any = { eventId: params.id };
+  if (phaseId) assignmentFilter.phaseId = phaseId;
+
+  const assignments = await prisma.judgeAssignment.findMany({
+    where: assignmentFilter,
+    select: { judgeId: true, teamId: true, status: true },
+  });
+
+  // Enrich teamAverages with assignment stats
+  const enrichedAverages = Object.values(teamAverages).map((ta) => {
+    const teamAssignments = assignments.filter((a) => a.teamId === ta.teamId);
+    return {
+      ...ta,
+      assignedJudges: teamAssignments.length,
+      completedJudges: teamAssignments.filter((a) => a.status === "COMPLETED").length,
+    };
+  });
+
   return NextResponse.json({
     evaluations,
     criteria,
-    teamAverages: Object.values(teamAverages),
+    teamAverages: enrichedAverages,
     tracks,
     stats: {
       totalTeams: teams.length,
-      evaluatedTeams: Object.values(teamAverages).filter(t => t.evaluationCount > 0).length,
+      evaluatedTeams: enrichedAverages.filter(t => t.evaluationCount > 0).length,
       totalEvaluations: evaluations.length,
+      totalAssignments: assignments.length,
+      completedAssignments: assignments.filter((a) => a.status === "COMPLETED").length,
     },
   });
 }

@@ -70,6 +70,8 @@ export async function POST(
     advancePercent,
     evaluationMethod,
     advancementMode = "OVERALL",
+    judgesPerTeam = 1,
+    qualificationMode = "SCORE_BASED",
     autoFilterRules,
     deliverableConfig,
   } = body;
@@ -103,6 +105,8 @@ export async function POST(
       advancePercent: advancePercent ? parseFloat(advancePercent) : null,
       evaluationMethod: evaluationMethod || null,
       advancementMode,
+      judgesPerTeam: parseInt(String(judgesPerTeam)) || 1,
+      qualificationMode,
       autoFilterRules: autoFilterRules || null,
       deliverableConfig: deliverableConfig || null,
     },
